@@ -6,63 +6,73 @@ require 'yaml'
 
 class Sample 
 
-  attr_accessor :file, :name, :bpm, :mfcc, :dir, :channels, :samplerate, :seconds, :frames, :max_amplitude, :slices, :stat, :bpm, :tags, :onsets
+  attr_accessor :file, :name, :bars, :mfcc, :dir, :seconds, :max_amplitude, :bpm, :onsets, :energy, :rhythm, :presence, :type
 
   def initialize file
-    @name = File.basename(file)
-
     @file = file
     @dir = File.dirname(@file)
-    @stat = Hash[`sox "#{@file}" -n stat 2>&1|sed '/Try/,$d'`.split("\n")[0..14].collect{|l| l.split(":").collect{|i| i.strip}}]
-    @seconds = @stat["Length (seconds)"].to_f
-    @max_amplitude = [@stat["Maximum amplitude"].to_f,stat["Minimum amplitude"].to_f.abs].max
-    # remove first column with timestamps
-    # remove second column with energy
-    @mfcc = Vector.elements(`aubiomfcc "#{@file}"`.split("\n").collect{|l| l.split(" ")[2,12].collect{|i| i.to_f}}.flatten)
-    @onsets = `aubioonset "#{@file}"`.split("\n").collect{|t| t.to_f}
-    @bpm = @file.match(/\d\d\d/).to_s.to_i
-    if @file.match /drum/
-      @tags = ["drums"]
-    elsif @file.match /music/
-      @tags = ["music"]
+    @name = File.basename(file)
+    @ext = File.extname file
+    @json_file = file.sub @ext,".json"
+    if File.exists? @json_file and File.mtime(@json_file) > File.mtime(file)
+      metadata =  JSON.parse(File.read(@json_file))
+      @bpm = metadata["bpm"]
+      @seconds = metadata["seconds"]
+      @max_amplitude = metadata["max_amplitude"]
+      @bars = metadata["bars"]
+      @type = metadata["type"]
+      @energy = metadata["energy"] # up, down, constant, variable
+      @rhythm = metadata["rhythm"] # straight, break
+      @presence = metadata["presence"] # fg, bg
+    else
+      stat = Hash[`sox "#{@file}" -n stat 2>&1|sed '/Try/,$d'`.split("\n")[0..14].collect{|l| l.split(":").collect{|i| i.strip}}]
+      @bpm = @file.match(/\d\d\d/).to_s.to_i
+      @bpm = 132
+      @seconds = stat["Length (seconds)"].to_f
+      @max_amplitude = [stat["Maximum amplitude"].to_f,stat["Minimum amplitude"].to_f.abs].max
+      @bars = @seconds*@bpm/60/4.0
     end
-    @bars = bars
+    @mfcc_file = file.sub @ext,".mfcc"
+    if File.exists? @mfcc_file and File.mtime(@mfcc_file) > File.mtime(file)
+      @mfcc =  Marshal.load(File.read(@mfcc_file))
+    else
+      # remove first column with timestamps
+      # remove second column with energy
+      @mfcc = Vector.elements(`aubiomfcc "#{@file}"`.split("\n").collect{|l| l.split(" ")[2,12].collect{|i| i.to_f}}.flatten)
+    end
+    @onsets_file = file.sub @ext,".onsets"
+    if File.exists? @onsets_file and File.mtime(@onsets_file) > File.mtime(file)
+      @onsets =  JSON.parse(File.read(@onsets_file))
+    else
+      @onsets = `aubioonset "#{@file}"`.split("\n").collect{|t| t.to_f}
+    end
     save
   end
 
-  def name
-    File.basename @file
-  end
-
-  #def file
-    #File.join(File.
-  #end
-
   def save
-    ext = File.extname file
-    metadata = file.sub ext,".meta"
-    File.open(metadata,"w+"){|f| Marshal.dump self, f}
+    File.open(@json_file,"w+") do |f|
+      meta = {
+        :bpm => @bpm,
+        :seconds => @seconds,
+        :max_amplitude => @max_amplitude,
+        :bars => @bars,
+        :type => @type,
+        :energy => @energy,
+        :rhythm => @rhythm,
+        :presence => @presence,
+      }
+      f.puts meta.to_json
+    end
+    File.open(@mfcc_file,"w+") { |f| Marshal.dump @mfcc, f }
+    File.open(@onsets_file,"w+") { |f| f.puts @onsets.to_json }
   end
 
   def delete
+    puts `trash "#{@json_file}"`
+    puts `trash "#{@mfcc_file}"`
+    puts `trash "#{@onsets_file}"`
     puts `trash "#{@file}"`
   end
-
-  def self.from_file file
-    ext = File.extname file
-    metadata = file.sub ext,".meta"
-    if File.exists? metadata and File.mtime(metadata) > File.mtime(file)
-      File.open(metadata){|f| return Marshal.load f}
-    else
-      Sample.new(file)
-    end
-  end
-
-  #def play
-    #puts `aplay -Dhw:1,0 "#{@file}"`
-    #puts `play #{@file} 2>&1 >/dev/null`
-    #puts `play #{@file}`
-  #end
 
   def png
     ext = File.extname @file
@@ -95,10 +105,6 @@ class Sample
     input.empty? ? nil : input.first.split("\t").first.to_i  # only onset pitch
   end
 
-  def bars
-    @seconds*@bpm/60/4
-  end
-
   def normalized?
     @max_amplitude > 0.95
   end
@@ -107,8 +113,8 @@ class Sample
     unless normalized?
       puts "normalizing #{@file}"
       `sox -G --norm "#{backup}" "#{@file}"`
-      @stat = Hash[`sox "#{@file}" -n stat 2>&1|sed '/Try/,$d'`.split("\n")[0..14].collect{|l| l.split(":").collect{|i| i.strip}}]
-      @max_amplitude = [@stat["Maximum amplitude"].to_f,stat["Minimum amplitude"].to_f.abs].max
+      stat = Hash[`sox "#{@file}" -n stat 2>&1|sed '/Try/,$d'`.split("\n")[0..14].collect{|l| l.split(":").collect{|i| i.strip}}]
+      @max_amplitude = [stat["Maximum amplitude"].to_f,stat["Minimum amplitude"].to_f.abs].max
       save
     end
   end

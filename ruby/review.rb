@@ -2,7 +2,7 @@
 require 'json'
 require 'ruby-osc'
 require_relative 'sample.rb'
-require 'highline'
+require 'highline/import'
 
 jack = spawn "jackd -d alsa -P hw:PCH -r 44100"
 Process.detach jack
@@ -24,34 +24,82 @@ at_exit do
   `killall jackd`
 end
 
-@cli = HighLine.new
 audio = Dir[File.join(ARGV[0],"**","*.{wav,WAV,aif,aiff,AIF,AIFF}")]
-samples = audio.collect{|f| Sample.from_file f}
+samples = audio.collect{|f| Sample.new f}
 
 # remove stale metadata files
-meta = Dir[File.join(ARGV[0],"**","*.meta")]
-meta.each { |f| puts `trash "#{f}"` if Dir[f.sub("meta","*")].size == 1 }
+meta = Dir[File.join(ARGV[0],"**","*.json")]
+meta.each { |f| puts `trash "#{f}"` if Dir[f.sub("json","*")].size == 1 and !f.match(/scenes\.json/)}
 
-# remove stale metadata files
-images = Dir[File.join(ARGV[0],"**","*.png")]
-images.each { |f| puts `trash "#{f}"` if Dir[f.sub("png","*")].size == 1 }
+# remove stale mfcc files
+mfcc = Dir[File.join(ARGV[0],"**","*.mfcc")]
+mfcc.each { |f| puts `trash "#{f}"` if Dir[f.sub("mfcc","*")].size == 1 }
 
-# TODO fix file paths
+# remove stale onsets files
+onsets = Dir[File.join(ARGV[0],"**","*.onsets")]
+onsets.each { |f| puts `trash "#{f}"` if Dir[f.sub("onsets","*")].size == 1 }
 
 # normalize
 samples.each { |s| s.normalize }
 
 # check tags
 samples.each do |s|
-  unless s.tags and (s.tags.include? "drums" or s.tags.include? "music")
+  unless s.type and ["drums","music"].include? s.type
     stay = true
     while stay do
-      @cli.say s.name
-      @cli.choose do |menu|
+      play s
+      puts "\e[2J"
+      choose do |menu|
+        menu.prompt = "Sample type of #{s.name}?"
         menu.choice("play") { play s }
         menu.choice("stop") { stop }
-        menu.choice(:drums) { s.tags << "drums"; s.save; stop; stay = false }
-        menu.choice(:music) { s.tags << "music"; s.save; stop; stay = false }
+        menu.choice(:drums) { s.type = "drums"; s.save; stop; stay = false }
+        menu.choice(:music) { s.type = "music"; s.save; stop; stay = false }
+        menu.choice(:skip) { stop; stay = false }
+      end
+    end
+  end
+  unless s.energy and ["up","down","constant","variable"].include? s.energy
+    stay = true
+    while stay do
+      puts "\e[2J"
+      choose do |menu|
+        menu.prompt = "Energy level of #{s.name}?"
+        menu.choice("play") { play s }
+        menu.choice("stop") { stop }
+        menu.choice(:up) { s.energy = "up"; s.save; stop; stay = false }
+        menu.choice(:down) { s.energy = "down"; s.save; stop; stay = false }
+        menu.choice(:constant) { s.energy = "constant"; s.save; stop; stay = false }
+        menu.choice(:variable) { s.energy = "variable"; s.save; stop; stay = false }
+        menu.choice(:skip) { stop; stay = false }
+      end
+    end
+  end
+  unless s.rhythm and ["straight","break"].include? s.rhythm
+    stay = true
+    while stay do
+      puts "\e[2J"
+      choose do |menu|
+        menu.prompt = "Rhythm of #{s.name}?"
+        menu.choice("play") { play s }
+        menu.choice("stop") { stop }
+        menu.choice(:straight) { s.rhythm = "straight"; s.save; stop; stay = false }
+        menu.choice(:break) { s.rhythm = "break"; s.save; stop; stay = false }
+        menu.choice(:skip) { stop; stay = false }
+      end
+    end
+  end
+  unless s.presence and ["foreground","background"].include? s.presence
+    stay = true
+    while stay do
+      puts "\e[2J"
+      choose do |menu|
+        menu.prompt = "Presence of #{s.name}?"
+        menu.choice("play") { play s }
+        menu.choice("stop") { stop }
+        menu.choice(:foreground) { s.presence = "foreground"; s.save; stop; stay = false }
+        menu.choice(:background) { s.presence = "background"; s.save; stop; stay = false }
+        menu.choice(:skip) { stop; stay = false }
       end
     end
   end
@@ -63,7 +111,8 @@ samples.each do |s|
     stay = true
     dir = "/home/ch/music/loops/cut/#{s.bpm}/"
     while stay do
-      @cli.choose do |menu|
+      puts "\e[2J"
+      choose do |menu|
         menu.header = "#{s.file}: #{s.bars} bars"
         menu.choice("play") { play s }
         menu.choice("stop") { stop }
@@ -78,10 +127,7 @@ samples.each do |s|
           puts `trash "#{s.file}"`
           stay = false
         }
-        menu.choice("next") {
-          stop
-          stay = false
-        }
+        menu.choice("skip") { stop; stay = false }
       end
     end
   end
@@ -91,12 +137,13 @@ def display sample
   Process.detach spawn("display '#{sample.png}'")
 end
 
+=begin
 
 # find/remove duplicates
 #threshold=0.95
 threshold=0.9
 @matrix = []
-@cli.say "Calculating similarities ..."
+say "Calculating similarities ..."
 last = samples.size-1
 (0..last).each do |i|
   @matrix[i] ||= []
@@ -142,7 +189,8 @@ end
   component = component.collect{|i| samples[i]}
   stay = true
   while stay do
-    @cli.choose do |menu|
+      puts "\e[2J"
+    choose do |menu|
       menu.header = "\n"+component.collect{|s| "#{s.name}: #{s.bars.round}"}.join(", ")
       component.each do |s|
         menu.choice("play \"#{s.name}\"".to_sym) { play s; menu.prompt = "#{s.name} playing" }
@@ -160,7 +208,6 @@ end
   end
 end
 
-=begin
 #p matrix
 p del#.join "\n"
 puts
