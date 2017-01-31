@@ -2,15 +2,16 @@
 require_relative 'setup.rb'
 require_relative 'sample.rb'
 
+@dir = ARGV[0]
 if File.exists? ARGV[0]
-  @scenes = File.open(ARGV[0]){|f| Marshal.load(f)}
+  @scenes = JSON.parse(File.read(File.join(@dir,"scenes.json"))).collect{|row| row.collect{|f| file = File.join(@dir,f); File.exists?(file) ? file : nil}}
 else
   @scenes = [[nil, nil, nil, nil, nil, nil, nil, nil], [nil, nil, nil, nil, nil, nil, nil, nil], [nil, nil, nil, nil, nil, nil, nil, nil], [nil, nil, nil, nil, nil, nil, nil, nil]]
 end
 
 @pool = [[],[],[],[]]
 
-Dir[File.join(ARGV[1],"**","*wav")].collect{|f| Sample.from_file File.expand_path(f)}.each do |s|
+Dir[File.join(@dir,"**","*wav")].collect{|f| Sample.new File.expand_path(f)}.each do |s|
   l = Loop.from_sample(s)
   unless @scenes.flatten.compact.collect{|f| f.file}.include? l.file
     if s.tags.include? "drums" and s.bars.round > 16

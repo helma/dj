@@ -32,6 +32,68 @@ end
 @current = [nil,nil,nil,nil]
 @bank = 0
 
+@dir = ARGV[0]
+@scenes = JSON.parse(File.read(File.join(@dir,"scenes.json"))).collect{|row| row.collect{|f| file = File.join(@dir,f); File.exists?(file) ? file : nil}}
+
+# TODO add metadata
+@bars = @scenes.collect do |row| 
+  row.collect do |f|
+    if f
+      ext = File.extname f
+      json_file = f.sub ext, ".json"
+      JSON.parse(File.read(json_file))["bars"]
+    end
+  end
+end
+
+@offsets = [0,0,0,0]
+
+@off = 12
+@red_low = 13
+@red_full = 15
+@red_flash = 11
+@amber_low = 29
+@amber_full = 63
+@amber_flash = 59
+@yellow_full = 62
+@yellow_flash = 58
+@green_low = 28
+@green_full = 60
+@green_flash = 56
+
+def status 
+  (0..3).each do |row|
+    (0..7).each do |col|
+      c = 8*@bank + col
+      if @scenes[row][c]
+        if @current[row] == @scenes[row][c]
+          if @bars[row][c].round <= 16
+            @midiout.puts(144,row*16+col,@green_low)
+          else
+            @midiout.puts(144,row*16+col,@green_full)
+          end
+        else
+          if @bars[row][c].round <= 16
+            @midiout.puts(144,row*16+col,@amber_low)
+          else
+            @midiout.puts(144,row*16+col,@amber_full)
+          end
+        end
+      else
+        @midiout.puts(144,row*16+col,@off)
+      end
+      if @offsets[row] == col
+        @midiout.puts(144,(row+4)*16+col,@red_full)
+      else
+        @midiout.puts(144,(row+4)*16+col,@off)
+      end
+    end
+    @bank == row ? @midiout.puts(144,row*16+8,@green_full) : @midiout.puts(144,row*16+8,@off) # bank A-D
+  end
+end
+
+status
+
 at_exit do
   `killall chuck`
   @midiout.puts(176,0,0)
