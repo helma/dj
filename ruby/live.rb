@@ -1,19 +1,6 @@
 #!/usr/bin/env ruby
 require_relative 'setup.rb'
 
-# TODO add metadata
-@bars = @scenes.collect do |row| 
-  row.collect do |f|
-    if f
-      ext = File.extname f
-      json_file = f.sub ext, ".json"
-      JSON.parse(File.read(json_file))["bars"]
-    end
-  end
-end
-
-@offsets = [0,0,0,0]
-
 while true do
   @midiin.gets.each do |m|
     d = m[:data]
@@ -22,9 +9,9 @@ while true do
     if d[0] == 144 and d[2] == 127
       if row < 4 and col < 8 # grid
         c = 8*@bank + col
-        @oscclient.send OSC::Message.new("/#{row}/read", @scenes[row][c])
+        @oscclient.send OSC::Message.new("/#{row}/read", @scenes[row][c]) if @scenes[row][c]
         @offsets[row] = 0
-        @current[row] = @scenes[row][col]
+        @current[row] = @scenes[row][c]
       elsif row < 8 and col < 8 # offsets
         row -= 4
         @oscclient.send OSC::Message.new("/#{row}/offset", col)
@@ -46,11 +33,11 @@ while true do
         end
       end
     elsif d[0] == 176 # 1-8
-      scene = d[1] - 104
+      col = 8*@bank + d[1] - 104
       (0..3).each do |row|
-        @oscclient.send OSC::Message.new("/#{row}/read", @scenes[row][scene])
+        @oscclient.send OSC::Message.new("/#{row}/read", @scenes[row][col]) if @scenes[row][col]
         @offsets[row] = 0
-        @current[row] = @scenes[row][scene]
+        @current[row] = @scenes[row][col]
       end
     end
     status

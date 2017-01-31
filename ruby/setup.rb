@@ -36,12 +36,12 @@ end
 @scenes = JSON.parse(File.read(File.join(@dir,"scenes.json"))).collect{|row| row.collect{|f| file = File.join(@dir,f); File.exists?(file) ? file : nil}}
 
 # TODO add metadata
-@bars = @scenes.collect do |row| 
+@meta = @scenes.collect do |row| 
   row.collect do |f|
     if f
       ext = File.extname f
       json_file = f.sub ext, ".json"
-      JSON.parse(File.read(json_file))["bars"]
+      JSON.parse(File.read(json_file))
     end
   end
 end
@@ -61,22 +61,32 @@ end
 @green_full = 60
 @green_flash = 56
 
+@midiout.puts(176,0,40) # LED flashing
+
 def status 
   (0..3).each do |row|
     (0..7).each do |col|
       c = 8*@bank + col
       if @scenes[row][c]
         if @current[row] == @scenes[row][c]
-          if @bars[row][c].round <= 16
-            @midiout.puts(144,row*16+col,@green_low)
-          else
-            @midiout.puts(144,row*16+col,@green_full)
+          if @meta[row][c]["rhythm"] == "straight"
+            @midiout.puts(144,row*16+col,@green_flash)
+          elsif @meta[row][c]["rhythm"] == "break"
+            @midiout.puts(144,row*16+col,@red_flash)
           end
         else
-          if @bars[row][c].round <= 16
-            @midiout.puts(144,row*16+col,@amber_low)
-          else
-            @midiout.puts(144,row*16+col,@amber_full)
+          if @meta[row][c]["rhythm"] == "straight"
+            if @meta[row][c]["presence"] == "foreground"
+              @midiout.puts(144,row*16+col,@green_full)
+            elsif @meta[row][c]["presence"] == "background"
+              @midiout.puts(144,row*16+col,@green_low)
+            end
+          elsif @meta[row][c]["rhythm"] == "break"
+            if @meta[row][c]["presence"] == "foreground"
+              @midiout.puts(144,row*16+col,@red_full)
+            elsif @meta[row][c]["presence"] == "background"
+              @midiout.puts(144,row*16+col,@red_low)
+            end
           end
         end
       else
