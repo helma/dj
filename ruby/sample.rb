@@ -2,18 +2,38 @@
 require 'fileutils'
 require 'matrix'
 require 'digest/md5'
-require 'yaml'
+require 'ruby-osc'
+require 'highline/import'
+
+# launchpad colors
+OFF = 12
+RED_LOW = 13
+RED_FULL = 15
+RED_FLASH = 11
+AMBER_LOW = 29
+AMBER_FULL = 63
+AMBER_FLASH = 59
+YELLOW_FULL = 62
+YELLOW_FLASH = 58
+GREEN_LOW = 28
+GREEN_FULL = 60
+GREEN_FLASH = 56
 
 class Sample 
 
-  attr_accessor :file, :name, :bars, :mfcc, :dir, :seconds, :max_amplitude, :bpm, :onsets, :energy, :rhythm, :presence, :type
+  attr_accessor :file, :name, :bars, :mfcc, :dir, :seconds, :max_amplitude, :bpm, :energy, :rhythm, :presence, :type, :playing
 
   def initialize file
+    return nil unless (file and File.exists? file)
     @file = file
     @dir = File.dirname(@file)
     @name = File.basename(file)
     @ext = File.extname file
+    @oscclient = OSC::Client.new 9669
+    @playing = false
     @json_file = file.sub @ext,".json"
+    @mfcc_file = file.sub @ext,".mfcc"
+    @onsets_file = file.sub @ext,".onsets"
     if File.exists? @json_file and File.mtime(@json_file) > File.mtime(file)
       metadata =  JSON.parse(File.read(@json_file))
       @bpm = metadata["bpm"]
@@ -23,7 +43,6 @@ class Sample
       @type = metadata["type"]
       @energy = metadata["energy"] # up, down, constant, variable
       @rhythm = metadata["rhythm"] # straight, break
-      @presence = metadata["presence"] # fg, bg
     else
       stat = Hash[`sox "#{@file}" -n stat 2>&1|sed '/Try/,$d'`.split("\n")[0..14].collect{|l| l.split(":").collect{|i| i.strip}}]
       @bpm = @file.match(/\d\d\d/).to_s.to_i
@@ -32,20 +51,31 @@ class Sample
       @max_amplitude = [stat["Maximum amplitude"].to_f,stat["Minimum amplitude"].to_f.abs].max
       @bars = @seconds*@bpm/60/4.0
     end
-    @mfcc_file = file.sub @ext,".mfcc"
-    if File.exists? @mfcc_file and File.mtime(@mfcc_file) > File.mtime(file)
-      @mfcc =  Marshal.load(File.read(@mfcc_file))
-    else
-      # remove first column with timestamps
-      # remove second column with energy
-      @mfcc = Vector.elements(`aubiomfcc "#{@file}"`.split("\n").collect{|l| l.split(" ")[2,12].collect{|i| i.to_f}}.flatten)
+    save
+  end
+
+  def menu options
+    repeat = true
+    choice = nil
+    while repeat do
+      #puts "\e[2J"
+      choose do |menu|
+        menu.prompt = "#{@name} (#{@bars})"
+        menu.choice("play") { play }
+        menu.choice("stop") { stop }
+        options.each{|option| menu.choice(option) { choice = option; repeat = false }}
+        menu.choice(:delete) { delete; repeat = false }
+        menu.choice(:skip) { repeat = false }
+      end
     end
-    @onsets_file = file.sub @ext,".onsets"
-    if File.exists? @onsets_file and File.mtime(@onsets_file) > File.mtime(file)
-      @onsets =  JSON.parse(File.read(@onsets_file))
-    else
-      @onsets = `aubioonset "#{@file}"`.split("\n").collect{|t| t.to_f}
-    end
+    stop
+    choice
+  end
+
+  def review force=false
+    @type = menu ["drums", "music"] unless @type #or force
+    @energy = menu ["high", "low"] unless @energy #or force
+    @rhythm = menu ["straight", "break"] unless @rhythm #or force
     save
   end
 
@@ -59,12 +89,12 @@ class Sample
         :type => @type,
         :energy => @energy,
         :rhythm => @rhythm,
-        :presence => @presence,
+        #:presence => @presence,
       }
       f.puts meta.to_json
     end
-    File.open(@mfcc_file,"w+") { |f| Marshal.dump @mfcc, f }
-    File.open(@onsets_file,"w+") { |f| f.puts @onsets.to_json }
+    File.open(@mfcc_file,"w+") { |f| Marshal.dump @mfcc, f } if @mfcc
+    File.open(@onsets_file,"w+") { |f| f.puts @onsets.to_json } if @onsets
   end
 
   def delete
@@ -119,6 +149,33 @@ class Sample
     end
   end
 
+  def color
+    if @rhythm == "straight"
+      if @energy == "high"
+        return GREEN_FULL
+      elsif @energy == "low"
+        return GREEN_LOW
+      end
+    elsif @rhythm == "break"
+      if @energy == "high"
+        return RED_FULL
+      elsif @energy == "low"
+        return RED_LOW
+      end
+    end
+    OFF
+  end
+
+  def play row=0
+    @oscclient.send(OSC::Message.new("/#{row}/read", @file))
+    @playing = true
+  end
+
+  def stop row=0
+    @oscclient.send(OSC::Message.new("/#{row}/mute"))
+    @playing = false
+  end
+
 =begin
   def zerocrossings
     snd = RubyAudio::Sound.open @file
@@ -133,10 +190,30 @@ class Sample
 =end
 
   def similarity sample # cosine
+    unless @mfcc
+      if File.exists? @mfcc_file and File.mtime(@mfcc_file) > File.mtime(file)
+        @mfcc =  Marshal.load(File.read(@mfcc_file))
+      else
+        # remove first column with timestamps
+        # remove second column with energy
+        @mfcc = Vector.elements(`aubiomfcc "#{@file}"`.split("\n").collect{|l| l.split(" ")[2,12].collect{|i| i.to_f}}.flatten)
+      end
+    end
     last = [@mfcc.size, sample.mfcc.size].min - 1
     v1 = Vector.elements(@mfcc[0..last])
     v2 = Vector.elements(sample.mfcc[0..last])
     v1.inner_product(v2)/(v1.magnitude*v2.magnitude)
+  end
+
+  def onsets
+    unless @onsets
+      if File.exists? @onsets_file and File.mtime(@onsets_file) > File.mtime(file)
+        @onsets =  JSON.parse(File.read(@onsets_file))
+      else
+        @onsets = `aubioonset "#{@file}"`.split("\n").collect{|t| t.to_f}
+      end
+    end
+    @onsets
   end
 
 end

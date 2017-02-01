@@ -1,32 +1,32 @@
 #!/usr/bin/env ruby
 require_relative 'setup.rb'
-require_relative 'sample.rb'
-
-@dir = ARGV[0]
-if File.exists? ARGV[0]
-  @scenes = JSON.parse(File.read(File.join(@dir,"scenes.json"))).collect{|row| row.collect{|f| file = File.join(@dir,f); File.exists?(file) ? file : nil}}
-else
-  @scenes = [[nil, nil, nil, nil, nil, nil, nil, nil], [nil, nil, nil, nil, nil, nil, nil, nil], [nil, nil, nil, nil, nil, nil, nil, nil], [nil, nil, nil, nil, nil, nil, nil, nil]]
-end
+require 'highline/import'
 
 @pool = [[],[],[],[]]
 
-Dir[File.join(@dir,"**","*wav")].collect{|f| Sample.new File.expand_path(f)}.each do |s|
-  l = Loop.from_sample(s)
-  unless @scenes.flatten.compact.collect{|f| f.file}.include? l.file
-    if s.tags.include? "drums" and s.bars.round > 16
-      @pool[0] << l
-    elsif s.tags.include? "drums" and s.bars.round <= 16
-      @pool[1] << l
-    elsif s.tags.include? "music" and s.bars.round > 16
-      @pool[2] << l
-    elsif s.tags.include? "music" and s.bars.round <= 16
-      @pool[3] << l
+all_files = @scenes.flatten.compact.collect{|f| f.file}
+
+Dir[File.join(@dir,"**","*wav")].each do |file|
+  unless all_files.include? file
+    sample = Sample.new file
+    sample.review
+    if sample.type == "drums"
+      if sample.energy == "high"
+        @pool[0] << sample
+      elsif sample.energy == "low"
+        @pool[1] << sample
+      end
+    elsif sample.type == "music"
+      if sample.energy == "high"
+        @pool[2] << sample
+      elsif sample.energy == "low"
+        @pool[3] << sample
+      end
     end
   end
 end
 
-@pool.each { |p| p.shuffle! }
+#@pool.each { |p| p.shuffle! }
 @pool[0] += @pool[1]
 @pool[1] += @pool[0]
 @pool[2] += @pool[3]
@@ -34,54 +34,33 @@ end
 
 @mutes = [false,false,false,false]
 
-def status 
-  # scenes
-  (0..3).each do |row|
-    (0..7).each do |col|
-      c = 8*@bank + col
-      if @scenes[row][c]
-        if @current[row] == @scenes[row][c] # playing
-          if @scenes[row][c].bars.round <= 16
-            @midiout.puts(144,row*16+col,28) # dimmed green
-          else
-            @midiout.puts(144,row*16+col,60) # bright green
-          end
-        else
-          if @scenes[row][c].bars.round <= 16
-            @midiout.puts(144,row*16+col,29)
-          else
-            @midiout.puts(144,row*16+col,63)
-          end
-        end
-      else
-        @midiout.puts(144,row*16+col,12)
-      end
-    end
-    @bank == row ? @midiout.puts(144,row*16+8,60) : @midiout.puts(144,row*16+8,12) # bank A-D
-    @mutes[row] ?  @midiout.puts(144,(row+4)*16+8,15) : @midiout.puts(144,(row+4)*16+8,12) # mutes E-H
-  end
-  # pool
+def pool 
   (4..7).each do |row|
     row -= 4
     (0..7).each do |col|
-      if @pool[row][col]
-        if @current[row] == @pool[row][col]
-          if @pool[row][col].bars.round <= 16
-            @midiout.puts(144,(row+4)*16+col,28)
-          else
-            @midiout.puts(144,(row+4)*16+col,60)
+      c = 8*@bank + col
+      if @pool[row][c]
+        sample = @pool[row][c]
+        if @current[row] == @pool[row][c]
+          if sample.rhythm == "straight"
+            @midiout.puts(144,row*16+col,GREEN_FLASH)
+          elsif sample.rhythm == "break"
+            @midiout.puts(144,row*16+col,RED_FLASH)
           end
         else
-          if @pool[row][col].bars.round <= 16
-            @midiout.puts(144,(row+4)*16+col,29)
-          else
-            @midiout.puts(144,(row+4)*16+col,63)
-          end
+          @midiout.puts(144,row*16+col,sample.color)
         end
       else
-        @midiout.puts(144,(row+4)*16+col,12)
+        @midiout.puts(144,row*16+col,OFF)
       end
     end
+  end
+end
+pool
+
+def mutes
+  (0..3).each do |row|
+    @mutes[row] ?  @midiout.puts(144,(row+4)*16+8,RED_FULL) : @midiout.puts(144,(row+4)*16+8,OFF) # mutes E-H
   end
 end
 
@@ -105,7 +84,6 @@ def play_pool row, col
   @current[row] = @pool[row][col]
 end
 
-status
 while true do
   @midiin.gets.each do |m|
     d = m[:data]
@@ -170,6 +148,10 @@ while true do
         @last_scene = nil
       end
     end
-    status
+    scenes
+    pool
+    mutes
   end
 end
+=begin
+=end
