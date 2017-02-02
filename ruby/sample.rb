@@ -2,7 +2,6 @@
 require 'fileutils'
 require 'matrix'
 require 'digest/md5'
-require 'ruby-osc'
 require 'highline/import'
 
 # launchpad colors
@@ -21,7 +20,7 @@ GREEN_FLASH = 56
 
 class Sample 
 
-  attr_accessor :file, :name, :bars, :mfcc, :dir, :seconds, :max_amplitude, :bpm, :energy, :rhythm, :presence, :type, :playing
+  attr_accessor :file, :name, :bars, :mfcc, :dir, :seconds, :max_amplitude, :bpm, :energy, :rhythm, :type
 
   def initialize file
     return nil unless (file and File.exists? file)
@@ -29,8 +28,6 @@ class Sample
     @dir = File.dirname(@file)
     @name = File.basename(file)
     @ext = File.extname file
-    @oscclient = OSC::Client.new 9669
-    @playing = false
     @json_file = file.sub @ext,".json"
     @mfcc_file = file.sub @ext,".mfcc"
     @onsets_file = file.sub @ext,".onsets"
@@ -54,31 +51,6 @@ class Sample
     save
   end
 
-  def menu options
-    repeat = true
-    choice = nil
-    while repeat do
-      #puts "\e[2J"
-      choose do |menu|
-        menu.prompt = "#{@name} (#{@bars})"
-        menu.choice("play") { play }
-        menu.choice("stop") { stop }
-        options.each{|option| menu.choice(option) { choice = option; repeat = false }}
-        menu.choice(:delete) { delete; repeat = false }
-        menu.choice(:skip) { repeat = false }
-      end
-    end
-    stop
-    choice
-  end
-
-  def review force=false
-    @type = menu ["drums", "music"] unless @type #or force
-    @energy = menu ["high", "low"] unless @energy #or force
-    @rhythm = menu ["straight", "break"] unless @rhythm #or force
-    save
-  end
-
   def save
     File.open(@json_file,"w+") do |f|
       meta = {
@@ -98,10 +70,45 @@ class Sample
   end
 
   def delete
+    mute
     puts `trash "#{@json_file}"`
     puts `trash "#{@mfcc_file}"`
     puts `trash "#{@onsets_file}"`
     puts `trash "#{@file}"`
+  end
+
+  def menu options
+    repeat = true
+    choice = nil
+    while repeat do
+      puts "\e[2J"
+      choose do |menu|
+        menu.prompt = "#{@name} (#{@bars})"
+        menu.choice("play") { play }
+        menu.choice("stop") { mute }
+        options.each{|option| menu.choice(option) { choice = option; repeat = false }}
+        menu.choice(:delete) { delete; repeat = false }
+        menu.choice(:skip) { repeat = false }
+      end
+    end
+    mute
+    choice
+  end
+
+  def review!
+    #play
+    @type = menu ["drums", "music"]
+    @energy = menu ["high", "low"]
+    @rhythm = menu ["straight", "break"]
+    save
+  end
+
+  def review 
+    #play
+    @type = menu ["drums", "music"] unless @type
+    @energy = menu ["high", "low"] unless @energy
+    @rhythm = menu ["straight", "break"] unless @rhythm
+    save
   end
 
   def png
@@ -164,16 +171,6 @@ class Sample
       end
     end
     OFF
-  end
-
-  def play row=0
-    @oscclient.send(OSC::Message.new("/#{row}/read", @file))
-    @playing = true
-  end
-
-  def stop row=0
-    @oscclient.send(OSC::Message.new("/#{row}/mute"))
-    @playing = false
   end
 
 =begin
