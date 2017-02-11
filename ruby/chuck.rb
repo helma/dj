@@ -19,6 +19,11 @@ require 'ruby-osc'
   end
 end
 
+at_exit do
+  `killall chuck`
+  `killall jackd`
+end
+
 class Chuck
 
   @@oscclient = OSC::Client.new 9669

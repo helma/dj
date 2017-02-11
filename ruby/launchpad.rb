@@ -7,26 +7,30 @@ require_relative 'chuck.rb'
 module Launchpad
   class Common
 
-    @@midiin = UniMIDI::Input.find{ |device| device.name.match(/Launchpad/) }.open
-    @@midiout = UniMIDI::Output.find{ |device| device.name.match(/Launchpad/) }.open
+      @@midiin = UniMIDI::Input.find{ |device| device.name.match(/Launchpad/) }.open
+      @@midiout = UniMIDI::Output.find{ |device| device.name.match(/Launchpad/) }.open
 
-    @@current = [nil,nil,nil,nil]
-    @@bank = 0
+      @@current = [nil,nil,nil,nil]
+      @@bank = 0
+      @@scenes = [[nil, nil, nil, nil, nil, nil, nil, nil], [nil, nil, nil, nil, nil, nil, nil, nil], [nil, nil, nil, nil, nil, nil, nil, nil], [nil, nil, nil, nil, nil, nil, nil, nil]]
 
-    @@dir = ARGV[0]
-    @@scenes = [[nil, nil, nil, nil, nil, nil, nil, nil], [nil, nil, nil, nil, nil, nil, nil, nil], [nil, nil, nil, nil, nil, nil, nil, nil], [nil, nil, nil, nil, nil, nil, nil, nil]]
+    def self.run dir
+      @@dir = dir
 
-    @@scenes_file = File.join(@@dir,"scenes.json")
-    if File.exists? @@scenes_file
-      JSON.parse(File.read(@@scenes_file)).each_with_index do |row,i|
-        row.each_with_index do |f,j|
-          file = File.join(@@dir,f)
-          File.exists?(file) ? @@scenes[i][j] = Sample.new(file) : @@scenes[i][j] = nil
+      @@scenes_file = File.join(@@dir,"scenes.json")
+      if File.exists? @@scenes_file
+        JSON.parse(File.read(@@scenes_file)).each_with_index do |row,i|
+          row.each_with_index do |f,j|
+            if f
+              file = File.join(@@dir,f)
+              @@scenes[i][j] = Sample.new(file) if File.exists?(file)
+            end
+          end
         end
       end
-    end
 
-    @@midiout.puts(176,0,40) # LED flashing
+      @@midiout.puts(176,0,40) # LED flashing
+    end
 
     def self.scenes 
       (0..3).each do |row|
@@ -69,10 +73,11 @@ module Launchpad
       end
     end
 
-    def self.run
+    def self.run dir
+      super dir
       while true do
-          scenes
-          offsets
+        scenes
+        offsets
         @@midiin.gets.each do |m|
           d = m[:data]
           col = d[1] % 16
@@ -108,9 +113,9 @@ module Launchpad
             col = 8*@@bank + d[1] - 104
             (0..3).each do |row|
               sample = @@scenes[row][col]
-              Chuck.play sample, row if @@scenes[row][col]
+              Chuck.play sample, row if sample
               @@offsets[row] = 0
-              @@current[row] = @@scenes[row][col]
+              @@current[row] = sample
             end
           end
         end
@@ -120,6 +125,54 @@ module Launchpad
 
   class Arrange < Common
 
+
+    def self.pool 
+      (4..7).each do |row|
+        r = row - 4
+        (0..7).each do |col|
+          c = 8*@@bank + col
+          sample = @@pool[r][c]
+          if sample
+            if @@current[r] == @@pool[r][c]
+              if sample.rhythm == "straight"
+                @@midiout.puts(144,row*16+col,GREEN_FLASH)
+              elsif sample.rhythm == "break"
+                @@midiout.puts(144,row*16+col,RED_FLASH)
+              end
+            else
+              @@midiout.puts(144,row*16+col,sample.color)
+            end
+          else
+            @@midiout.puts(144,row*16+col,OFF)
+          end
+        end
+      end
+    end
+
+    def self.mutes
+      (0..3).each do |row|
+        @@mutes[row] ?  @@midiout.puts(144,(row+4)*16+8,RED_FULL) : @@midiout.puts(144,(row+4)*16+8,OFF) # mutes E-H
+      end
+    end
+
+    def self.save_scene i
+      # TODO add removd sampls from scenes to pool
+      (0..3).each do |track|
+        @@scenes[track][i] = @@current[track]
+        (0..3).each do |t|
+          @@pool[t].delete @@current[track]
+        end
+      end
+      save
+    end
+
+    def self.save
+      # TODO git
+      File.open(@@scenes_file,"w+"){|f| f.puts @@scenes.collect{|r| r.collect{|s| s.name if s}}.to_json}
+    end
+
+    def self.run dir
+      super dir
     @@pool = [[],[],[],[]]
 
     all_files = @@scenes.flatten.compact.collect{|f| f.file}
@@ -152,55 +205,11 @@ module Launchpad
     @@pool[3] = music[1]+music[0]
 
     @@mutes = [false,false,false,false]
-
-    def self.pool 
-      (4..7).each do |row|
-        r = row - 4
-        (0..7).each do |col|
-          c = 8*@@bank + col
-          sample = @@pool[r][c]
-          if sample
-            if @@current[r] == @@pool[r][c]
-              if sample.rhythm == "straight"
-                @@midiout.puts(144,row*16+col,GREEN_FLASH)
-              elsif sample.rhythm == "break"
-                @@midiout.puts(144,row*16+col,RED_FLASH)
-              end
-            else
-              @@midiout.puts(144,row*16+col,sample.color)
-            end
-          else
-            @@midiout.puts(144,row*16+col,OFF)
-          end
-        end
-      end
-    end
-
-    def self.mutes
-      (0..3).each do |row|
-        @@mutes[row] ?  @@midiout.puts(144,(row+4)*16+8,RED_FULL) : @@midiout.puts(144,(row+4)*16+8,OFF) # mutes E-H
-      end
-    end
-
-    def self.save_scene i
-      (0..3).each do |track|
-        @@scenes[track][i] = @@current[track]
-        (0..3).each do |t|
-          @@pool[t].delete @@current[track]
-        end
-      end
-      save
-    end
-
-    def self.save
-      puts @@scenes.collect{|r| r.collect{|s| s.file if s}}.to_json
-    end
-
-    def self.run
-      scenes
-      pool
-      mutes
+      @@last_scene = nil
       while true do
+        scenes
+        pool
+        mutes
         @@midiin.gets.each do |m|
           d = m[:data]
           col = d[1] % 16
@@ -214,12 +223,16 @@ module Launchpad
                   c = 8*@@bank + col
                   sample = @@scenes[row][c]
                   if sample
+                    # TODO doubletap
                     if Time.now - @@del_time > 1 # long press
-                      sample.delete
-                      @@scenes[row][c] = nil
-                      @@current[row] = nil
+                      @@midiout.puts(144,row*16+c,AMBER_FULL)
+                      sample.review!
+                      if !File.exists? sample.file
+                        @@scenes[row][c] = nil
+                        @@current[row] = nil
+                      end
                     else # short press
-                      Chuck.play(row) unless @@mutes[row]
+                      Chuck.play(sample,row) unless @@mutes[row]
                       @@current[row] = sample
                     end
                   else
@@ -228,14 +241,18 @@ module Launchpad
                   end
                 elsif row < 8 # pool
                   row -= 4
-                  sample = @@pool[row][col]
+                  c = 8*@@bank + col
+                  sample = @@pool[row][c]
                   if sample
                     if Time.now - @@del_time > 1 # long press
-                      sample.delete
-                      @@pool[row].delete_at col
-                      @@current[row] = nil
+                      @@midiout.puts(144,(row+4)*16+c,AMBER_FULL)
+                      sample.review!
+                      if !File.exists? sample.file
+                        @@scenes[row][c] = nil
+                        @@current[row] = nil
+                      end
                     else # short press
-                      Chuck.play(row) unless @@mutes[row] 
+                      Chuck.play(sample,row) unless @@mutes[row] 
                       @@current[row] = sample
                     end
                   else
@@ -273,7 +290,7 @@ module Launchpad
               else
                 (0..3).each do |row|
                   sample = @@scenes[row][c]
-                  Chuck.play row if sample
+                  Chuck.play sample, row if sample
                   @@current[row] = sample 
                 end if @@last_scene
               end
@@ -285,10 +302,4 @@ module Launchpad
       end
     end
   end
-end
-
-at_exit do
-  `killall chuck`
-  #@@midiout.puts(176,0,0)
-  `killall jackd`
 end

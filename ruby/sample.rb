@@ -1,6 +1,7 @@
 #!/bin/env ruby
 require 'fileutils'
 require 'matrix'
+require 'yaml'
 require 'digest/md5'
 require 'highline/import'
 
@@ -81,22 +82,21 @@ class Sample
     repeat = true
     choice = nil
     while repeat do
-      puts "\e[2J"
       choose do |menu|
         menu.prompt = "#{@name} (#{@bars})"
-        menu.choice("play") { play }
-        menu.choice("stop") { mute }
+        #menu.choice("play") { play }
+        #menu.choice("stop") { mute }
         options.each{|option| menu.choice(option) { choice = option; repeat = false }}
         menu.choice(:delete) { delete; repeat = false }
         menu.choice(:skip) { repeat = false }
       end
     end
-    mute
     choice
   end
 
   def review!
-    #play
+    puts "\e[2J"
+    puts to_yaml
     @type = menu ["drums", "music"]
     @energy = menu ["high", "low"]
     @rhythm = menu ["straight", "break"]
