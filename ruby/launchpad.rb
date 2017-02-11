@@ -167,8 +167,8 @@ module Launchpad
     end
 
     def self.save
-      # TODO git
       File.open(@@scenes_file,"w+"){|f| f.puts @@scenes.collect{|r| r.collect{|s| s.name if s}}.to_json}
+      `cd "#{@@dir}"; git commit -m "\`date\`" "#{@@scenes_file}"`
     end
 
     def self.run dir

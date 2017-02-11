@@ -71,7 +71,7 @@ class Sample
   end
 
   def delete
-    mute
+    Chuck.mute
     puts `trash "#{@json_file}"`
     puts `trash "#{@mfcc_file}"`
     puts `trash "#{@onsets_file}"`
@@ -84,8 +84,8 @@ class Sample
     while repeat do
       choose do |menu|
         menu.prompt = "#{@name} (#{@bars})"
-        #menu.choice("play") { play }
-        #menu.choice("stop") { mute }
+        menu.choice("play") { Chuck.play self }
+        menu.choice("stop") { Chuck.mute }
         options.each{|option| menu.choice(option) { choice = option; repeat = false }}
         menu.choice(:delete) { delete; repeat = false }
         menu.choice(:skip) { repeat = false }
@@ -104,12 +104,16 @@ class Sample
   end
 
   def review 
-    #play
     @type = menu ["drums", "music"] unless @type
     @energy = menu ["high", "low"] unless @energy
     @rhythm = menu ["straight", "break"] unless @rhythm
     save
   end
+
+  def play
+    `mpv "#{@file}"` 
+  end
+
 
   def png
     ext = File.extname @file

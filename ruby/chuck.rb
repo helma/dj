@@ -29,6 +29,7 @@ class Chuck
   @@oscclient = OSC::Client.new 9669
 
   def self.play sample, track=0
+    p sample.file, track
     @@oscclient.send(OSC::Message.new("/#{track}/read", sample.file))
   end
 

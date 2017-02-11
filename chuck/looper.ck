@@ -36,6 +36,7 @@ public class Looper {
   }
 
   fun void read(string f) {
+  <<< f >>>;
     f => file;
     Clock.bar => now;
     disconnect();
