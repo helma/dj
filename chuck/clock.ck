@@ -1,69 +1,88 @@
 public class Clock {
+
   132.0 => static float bpm;
   1.0 => static float rate;
   0 => static int pulses;
-  new Event @=> static Event @ pulse;
-  new Event @=> static Event @ bar;
-  static Shred @ ticker;
+  0 => int play;
+
+  new Event @=> static Event @ _sixteenth;
+  new Event @=> static Event @ _bars;
+  new Event @=> static Event @ _eightbars;
+
+  static Shred @ tick8bars;
+  static Shred @ tickbars;
+  static Shred @ tick16th;
+
+  OscSend osend;
+  osend.setHost("localhost",9669);
  
-  fun static void tick() {
-    0 => pulses;
+  fun void eightbars() {
+    _eightbars.broadcast();
     while (true) {
-      pulse.broadcast();
-      pulses + 1 => pulses;
-      if ((pulses % 16) == 0) { bar.broadcast(); }
-      quant() => now;
+      osend.startMsg("/eightbars","i");
+      osend.addInt(pulses/(8*16));
+      8*240::second/(bpm*rate) => now;
     }
   }
 
-  fun static dur bardur() { return 4*minute/(bpm*rate); }
+  fun void bars() {
+    while (true) {
+      _bars.broadcast();
+      osend.startMsg("/bars","i");
+      osend.addInt(pulses/16);
+      240::second/(bpm*rate) => now;
+    }
+  }
+ 
+  fun void sixteenth() {
+    while (true) {
+      _sixteenth.broadcast();
+      osend.startMsg("/sixteenth","i");
+      osend.addInt(pulses);
+      if (play == 1) { pulses + 1 => pulses; }
+      15::second/(bpm*rate) => now;
+    }
+  }
 
-  fun static dur quant() { return bardur()/16; }
+  fun void osc() {
 
-  fun static void osc() {
     OscIn oin;
-    9669 => oin.port;
+    9668 => oin.port;
     OscMsg msg;
     oin.listenAll();
 
-    spork ~ tick() @=> ticker;
+    spork ~ eightbars() @=> tick8bars;
+    spork ~ bars() @=> tickbars;
+    spork ~ sixteenth() @=> tick16th;
 
     while ( true ) {
       oin => now;
       while ( oin.recv(msg) ) { 
-        if (msg.address == "/bpm") { msg.getFloat(0) => bpm; }
-        else if (msg.address == "/restart") {
-          ticker.exit();
-          spork ~ tick() @=> ticker;
+        if (msg.address == "/play") {
+          msg.getString(1) => string quant;
+          //if (quant == "eightbars") { Clock.eightbars => now }
+          //else if (quant == "bars") { Clock.bars => now }
+          //else if (quant == "sixteenth") { Clock.sixteenth => now }
+          (msg.getFloat(0)/(15/(bpm*rate))) $ int => pulses;
+          tick8bars.exit();
+          tickbars.exit();
+          tick16th.exit();
+          1 => play;
+          spork ~ eightbars() @=> tick8bars;
+          spork ~ bars() @=> tickbars;
+          spork ~ sixteenth() @=> tick16th;
+        }
+        else if (msg.address == "/read") {
+          0 => play;
+          0 => pulses;
         }
         else if (msg.address == "/rate") {
-          pulse => now;
+          15::second/(bpm*rate) => now;
           msg.getFloat(0) => rate;
         }
       }
     }
   }
-
 }
-/*
-MidiOut mout; 
-MidiMsg msg; 
 
-// check if port is open 
-if( !mout.open( 0 ) ) me.exit(); 
-
-// fill the message with data 
-47 => msg.data1; 
-100 => msg.data2; 
-100 => msg.data3; 
-
-// bugs after this point can be sent 
-// to the manufacturer of your synth 
-
-while( true ) 
-{ 
-    mout.send( msg ); 
-    // allow 2 seconds to pass 
-    2::second => now; 
-}
-*/
+//while(true) { minute => now; }
