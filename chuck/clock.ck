@@ -13,12 +13,16 @@ public class Clock {
   static Shred @ tickbars;
   static Shred @ tick16th;
 
+//MidiOut mout;
+//mout.open(2);
+
+
   OscSend osend;
   osend.setHost("localhost",9669);
  
   fun void eightbars() {
-    _eightbars.broadcast();
     while (true) {
+      _eightbars.broadcast();
       osend.startMsg("/eightbars","i");
       osend.addInt(pulses/(8*16));
       8*240::second/(bpm*rate) => now;
@@ -60,17 +64,20 @@ public class Clock {
       while ( oin.recv(msg) ) { 
         if (msg.address == "/play") {
           msg.getString(1) => string quant;
-          //if (quant == "eightbars") { Clock.eightbars => now }
-          //else if (quant == "bars") { Clock.bars => now }
-          //else if (quant == "sixteenth") { Clock.sixteenth => now }
+          if (quant == "eightbars") { _eightbars => now; }
+          else if (quant == "bars") { _bars => now; }
+          else if (quant == "sixteenth") { _sixteenth => now; }
+          else {
+            <<< "unquant" >>>;
+            tick8bars.exit();
+            tickbars.exit();
+            tick16th.exit();
+            1 => play;
+            spork ~ eightbars() @=> tick8bars;
+            spork ~ bars() @=> tickbars;
+            spork ~ sixteenth() @=> tick16th;
+          }
           (msg.getFloat(0)/(15/(bpm*rate))) $ int => pulses;
-          tick8bars.exit();
-          tickbars.exit();
-          tick16th.exit();
-          1 => play;
-          spork ~ eightbars() @=> tick8bars;
-          spork ~ bars() @=> tickbars;
-          spork ~ sixteenth() @=> tick16th;
         }
         else if (msg.address == "/read") {
           0 => play;
