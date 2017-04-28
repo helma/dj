@@ -3,7 +3,7 @@
   `killall chuck`
   `killall jackd`
   #`killall ruby`
-begin
+#begin
 require "ruby-osc"
 require "unimidi"
 
@@ -23,16 +23,19 @@ GREEN_LOW = 28
 GREEN_FULL = 60
 GREEN_FLASH = 56
 
+jack = nil
 ["UDAC8", "USBStreamer","CODEC","PCH"].each do |d|
   if `aplay -l |grep card`.match(d)
     jack = spawn "jackd -d alsa -P hw:#{d} -r 44100"
     Process.detach jack
     sleep 1
-    chuck = spawn "chuck $HOME/music/src/dj/chuck/clock.ck $HOME/music/src/dj/chuck/deck.ck" 
-    Process.detach chuck
     break
   end
 end
+
+#chuck = spawn "chuck $HOME/music/src/dj/chuck/deck.ck" 
+chuck = spawn "chuck deck.ck" 
+Process.detach chuck
 
 tracks = File.readlines(ARGV[0]).collect{|f| f.chomp} if File.exists? ARGV[0]
 oscclient = OSC::Client.new 9668
@@ -44,44 +47,48 @@ bpm = 132.0
 eightbars = 0
 bars = 0
 sixteenth = 0
+led_16th = 0
+led_bars = 0
+led_8bars = 0
+nr_8bars = 0
 midiout.puts(176,0,0)  # reset
 
-fork do
+osc = fork do
   OSC.run do
+
     oscserver = Server.new 9669
+    last16th = 0
+    lastbar = 0
+    last8 = 0
 
-    last16th = nil
     oscserver.add_pattern "/sixteenth" do |*args| 
-      midiout.puts(144,last16th,OFF) if last16th
       sixteenth = args[1]
-      note = args[1] % 16
-      note > 7 ? note += 112-8 : note += 96
-      midiout.puts(144,note,GREEN_FULL)
-      last16th = note
-    end
+      led_16th = sixteenth % 16
+      led_16th > 7 ? led_16th += 112-8 : led_16th += 96
+      midiout.puts(144,last16th,OFF) if last16th != led_16th
+      midiout.puts(144,led_16th,GREEN_FULL)
+      last16th = led_16th
 
-    lastbar = nil
-    oscserver.add_pattern "/bars" do |*args| 
-      bars = args[1]
-      note = args[1] % 8 + 80
-      #p bars, note
-      midiout.puts(144,note,GREEN_FULL)
-      midiout.puts(144,lastbar,OFF) if lastbar and lastbar != note
-      lastbar = note
-    end
+      if (sixteenth % 16) == 0
+        bars = sixteenth/16
+        led_bars = bars % 8 + 80
+        midiout.puts(144,lastbar,OFF) if lastbar != led_bars
+        midiout.puts(144,led_bars,GREEN_FULL)
+        lastbar = led_bars
+      end
 
-    last8 = nil
-    oscserver.add_pattern "/eightbars" do |*args| 
-      eightbars = args[1]
-      col = args[1] % 8
-      row = args[1] / 8
-      note = col+16*row
-      p eightbars, note
-      midiout.puts(144,note,GREEN_FULL)
-      midiout.puts(144,last8,AMBER_LOW) if last8 and last8 != note
-      last8 = note
+      if (bars % 8) == 0
+        eightbars = bars/8
+        col = eightbars % 8
+        row = eightbars / 8
+        led_8bars = col+16*row
+        if eightbars <= nr_8bars
+          midiout.puts(144,last8,AMBER_LOW) if last8 != led_8bars
+          midiout.puts(144,led_8bars,GREEN_FULL)
+        end
+        last8 = led_8bars
+      end
     end
-
   end
 end
 
@@ -93,18 +100,16 @@ while true do
       row = d[1] / 16
       if col < 8 # grid
         if d[2] == 127 # press
-          q = ""
+          q = 0
           if row < 4 # eightbars
-            q = "eightbars" if quant
-            pos = (row*8+col)*8*240.0/bpm
+            q = 16*8 if quant
+            pos = (row*8+col)*8*16
           elsif row == 6 # bars
-            q = "bars" if quant
-            pos = eightbars*8*240.0/bpm
-            pos += col*240.0/bpm
+            q = 16 if quant
+            pos = col*8
           else # 16th
-            q = "sixteenth" if quant
-            pos = eightbars*8*240.0/bpm + bars*240.0/bpm
-            pos += col*16.0/bpm
+            q = 1 if quant
+            pos = 8*(row-7)+col
           end
           oscclient.send(OSC::Message.new("/play",pos,q))
         end
@@ -136,7 +141,6 @@ while true do
             n += 1
           end
         end
-        midiout.puts(144,0,GREEN_FULL)
         oscclient.send(OSC::Message.new("/read", file)) if file
         (104..111).each {|n| midiout.puts(176,n,OFF) }
         midiout.puts(176,d[1],GREEN_FULL)
@@ -145,6 +149,7 @@ while true do
   end
 end
 
+=begin
 rescue StandardError => e
   p "EXIT"
   p e.inspect
@@ -153,3 +158,4 @@ rescue StandardError => e
   `killall jackd`
   `killall ruby`
 end
+=end
