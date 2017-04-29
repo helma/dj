@@ -52,6 +52,7 @@ led_bars = 0
 led_8bars = 0
 nr_8bars = 0
 midiout.puts(176,0,0)  # reset
+midiout.puts(176,0,40) # LED flashing
 
 osc = Thread.fork do
   OSC.run do
@@ -116,6 +117,7 @@ while true do
             pos = bars*16+8*(row-6)+col
           end
           oscclient.send(OSC::Message.new("/play",pos,q))
+          midiout.puts(144,d[1],GREEN_FLASH) if quant
         end
       elsif col == 8 
         if row == 0 # A
