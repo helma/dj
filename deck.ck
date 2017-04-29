@@ -38,9 +38,11 @@ spork ~ ticker();
 
 while ( true ) {
   oin => now;
+
+  //OscSend osend;
+  //osend.setHost("localhost",9669);
   while ( oin.recv(msg) != 0 ) { 
     if (msg.address == "/read") {
-  <<< msg.address >>>;
       0 => buffer.play;
       msg.getString(0) => buffer.read;
       0 => buffer.pos;
@@ -50,14 +52,25 @@ while ( true ) {
     else if (msg.address == "/play") {
       msg.getInt(1) => quant;
       msg.getInt(0) => ticks;
-      quant*tickdur() => now;
-      (ticks*15/(bpm*rate)) $ int => buffer.pos;
+      //<<< quant, ticks >>>;
+      //quant*tickdur() => now;
+      44100*ticks*15/(bpm*rate) $ int => buffer.pos;
       1 => buffer.play;
+      //<<< buffer.pos() >>>;
     }
     else if (msg.address == "/rate") {
       tickdur() => now;
       msg.getFloat(0) => rate;
       msg.getFloat(0) => buffer.rate;
+    }
+    else if (msg.address == "/stop") {
+      0 => ticks;
+    tickdur() => now;
+      0 => buffer.play;
+      0 => buffer.pos;
+      1 => rate;
+      //osend.startMsg("/sixteenth","i");
+      //osend.addInt(ticks);
     }
   }
 }
