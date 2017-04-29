@@ -106,10 +106,10 @@ while true do
         if d[2] == 127 # press
           q = 0
           if row < 5 # eightbars
-            q = 16*8 if quant
+            q = 3 if quant
             pos = (row*8+col)*8*16
           elsif row == 5 # bars
-            q = 16 if quant
+            q = 2 if quant
             pos = eightbars*8*16+col*16
           else # 16th
             q = 1 if quant
