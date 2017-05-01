@@ -33,7 +33,6 @@ jack = nil
   end
 end
 
-#chuck = spawn "chuck $HOME/music/src/dj/chuck/deck.ck" 
 chuck = spawn "chuck #{File.dirname(__FILE__)}/deck.ck" 
 Process.detach chuck
 
@@ -97,7 +96,8 @@ osc = Thread.fork do
   end
 end
 
-while true do
+
+loop do
   midiin.gets.each do |m|
     d = m[:data]
     if d[0] == 144
