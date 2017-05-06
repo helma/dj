@@ -31,10 +31,10 @@ fio.open("/home/ch/music/live/dj/playlist.m3u", FileIO.READ);
 0 => int nr_files;
 while( fio.more() && nr_files < 8 ) {
   fio.readLine() => files[nr_files];
-  sendcc(nr_files+103,29);
+  <<< nr_files, files[nr_files] >>>;
+  sendcc(nr_files+104,29);
   nr_files+1 => nr_files;
 }
-nr_files-1 => nr_files;
 
 // buffer
 SndBuf2 buffer; 
@@ -98,10 +98,30 @@ fun void seek(int t,int q) {
   if (q == 1) { tick => now; }
   else if (q == 2) { bar => now; }
   else if (q == 3) { eightbar => now; }
+  <<< t >>>;
+  <<< t/128 >>>;
   t => ticks;
+  <<< ticks >>>;
   44100*ticks*15/(bpm*rate) $ int => buffer.pos;
+  if (buffer.play() == 0) { // start
+    1 => quant;
+    1 => buffer.play;
+  }
 }
- 
+
+fun void loop() {
+  if (buffer.play() == 0) { 1 => buffer.play; }
+  while (true) {
+  bar => now;
+  //eightbar => now;
+  (44100*15/(bpm*rate)) $ int => int p;
+  p => buffer.pos;
+  <<< p, buffer.pos() >>>;
+  //(44100*ticks*15/(bpm*rate)) $ int => buffer.pos;
+  //128*tickdur() => buffer.pos;
+  }
+}
+
 fun void ticker() {
 
   while (true) {
@@ -124,7 +144,7 @@ fun void ticker() {
         led_bars => lastbar;
       }
 
-      if (ticks % (16*8) == 0) {
+      if (ticks % 128 == 0) {
         eightbar.broadcast();
         ticks/128 => eightbars;
         eightbars%8 => int col;
@@ -163,15 +183,16 @@ fun void listen() {
         if (col < 8) { // grid
           if (inmsg.data3 == 127) { // press
             sendnote(inmsg.data2,56);
-            if (row < 5) { 128*(8*row+col) => pos; 3 => q; } // eightbars
+            //else { tick => now; }
+            if (row < 5) {
+              <<< ticks >>>;
+            128*(8*row+col) => pos; 3 => q;
+            } // eightbars
             else if (row == 5) { 128*eightbars+16*col => pos; 2 => q; } // bars
             else { 16*bars+8*(row-6)+col => pos; 1 => q; } // 16th
             if (quant == 0) { 0 => q; }
             spork ~ seek(pos,q);
-            if (buffer.play() == 0) { // start
-              1 => quant;
-              1 => buffer.play;
-            }
+            //spork ~ loop();
           }
         }
 
@@ -193,6 +214,8 @@ fun void listen() {
 
       else if (inmsg.data1 == 176 && inmsg.data3 == 127) { // 1-8 press
         inmsg.data2-104 => int i;
+        <<< nr_files >>>;
+        <<< i, files[i] >>>;
         if (i < nr_files) {
           0 => buffer.play;
           <<< files[i] >>>;
