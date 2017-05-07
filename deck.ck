@@ -31,7 +31,6 @@ fio.open("/home/ch/music/live/dj/playlist.m3u", FileIO.READ);
 0 => int nr_files;
 while( fio.more() && nr_files < 8 ) {
   fio.readLine() => files[nr_files];
-  <<< nr_files, files[nr_files] >>>;
   sendcc(nr_files+104,29);
   nr_files+1 => nr_files;
 }
@@ -41,18 +40,9 @@ SndBuf2 buffer;
 0 => buffer.play;
 buffer => dac;
 
-// events
-Event tick;
-Event bar;
-Event eightbar;
-
 132.0 => float bpm;
 1.0 => float rate;
-0 => int ticks;
-0 => int bars;
-0 => int eightbars;
 0 => int quant;
-0 => int nr_8bars;
 
 0 => int led_16th;
 0 => int last16th;
@@ -61,7 +51,18 @@ Event eightbar;
 0 => int led_8bars;
 0 => int last8;
 
-fun dur tickdur() { return 15::second/(bpm*rate); }
+fun dur tickdur() { return 15::second/bpm; }
+fun int ticksamples() { return 44100*15/bpm $ int; }
+
+fun float ticks() { return bpm*buffer.pos()/44100/15; }
+fun float bars() { return ticks()/16; }
+fun float eightbars() { return ticks()/128; }
+
+fun int eightbar_offset() { return buffer.pos() - eightbars()$int * 128*ticksamples(); }
+fun int bar_offset() { return buffer.pos() - bars()$int * 16*ticksamples(); }
+fun int tick_offset() { return buffer.pos() - ticks()$int * ticksamples(); }
+
+fun int nr_8bars() { return Math.ceil(bpm*buffer.samples()/(8*240*44100)) $ int; }
 
 fun void setrate(float r) {
   tickdur() => now;
@@ -72,9 +73,6 @@ fun void setrate(float r) {
 fun void reset() {
   0 => buffer.play;
   0 => buffer.pos;
-  0 => int ticks;
-  0 => int bars;
-  0 => int eightbars;
   0 => int quant;
   0 => int n;
 
@@ -86,7 +84,7 @@ fun void reset() {
   0 => int last8;
   for (0 => int r; r < 4; r++) {
     for (0 => int c; c < 8; c++) {
-      if (n <= nr_8bars) { sendnote(16*r+c,29); }
+      if (n <= nr_8bars()) { sendnote(16*r+c,29); }
       else { sendnote(16*r+c,12); }
       n++;
     }
@@ -94,80 +92,42 @@ fun void reset() {
   sendnote(0,60);
 }
 
-fun void seek(int t,int q) {
-  if (q == 1) { tick => now; }
-  else if (q == 2) { bar => now; }
-  else if (q == 3) { eightbar => now; }
-  <<< t >>>;
-  <<< t/128 >>>;
-  t => ticks;
-  <<< ticks >>>;
-  44100*ticks*15/(bpm*rate) $ int => buffer.pos;
-  if (buffer.play() == 0) { // start
-    1 => quant;
-    1 => buffer.play;
-  }
-}
-
-fun void loop() {
-  if (buffer.play() == 0) { 1 => buffer.play; }
-  while (true) {
-  bar => now;
-  //eightbar => now;
-  (44100*15/(bpm*rate)) $ int => int p;
-  p => buffer.pos;
-  <<< p, buffer.pos() >>>;
-  //(44100*ticks*15/(bpm*rate)) $ int => buffer.pos;
-  //128*tickdur() => buffer.pos;
-  }
-}
-
-fun void ticker() {
+fun void view() {
 
   while (true) {
     if (buffer.play() == 1) { 
 
-      tick.broadcast();
-      ticks % 16 => led_16th;
+      ticks() $ int % 16 => led_16th;
       if (led_16th > 7) { led_16th + 104 => led_16th; }
       else { led_16th + 96 => led_16th; }
       if (last16th != led_16th) { sendnote(last16th,12); }
       sendnote(led_16th,60);
       led_16th => last16th;
 
-      if (ticks % 16 == 0) {
-        bar.broadcast();
-        ticks/16 => bars;
-        bars % 8 + 80 => led_bars;
+        bars() $ int % 8 + 80 => led_bars;
         if ( lastbar != led_bars) { sendnote(lastbar,12); }
         sendnote(led_bars,60);
         led_bars => lastbar;
-      }
 
-      if (ticks % 128 == 0) {
-        eightbar.broadcast();
-        ticks/128 => eightbars;
-        eightbars%8 => int col;
-        eightbars/8 => int row;
+        eightbars() $ int %8 => int col;
+        eightbars() $ int /8 => int row;
         16*row+col => led_8bars;
-        if (eightbars <= nr_8bars) {
+        if (eightbars() <= nr_8bars()) {
           if (last8 != led_8bars) { sendnote(last8,29); }
           sendnote(led_8bars,60);
           led_8bars => last8;
         }
         else { reset(); }
-      }
-      ticks + 1 => ticks; 
     }
     tickdur() => now;
   }
 }
 
-fun void listen() {
+fun void controller() {
 
   0 => int pos;
+  0 => int offset;
   0 => int lasttrack;
-  int q;
 
   while ( true ) {
 
@@ -182,17 +142,26 @@ fun void listen() {
         
         if (col < 8) { // grid
           if (inmsg.data3 == 127) { // press
-            sendnote(inmsg.data2,56);
-            //else { tick => now; }
+            //sendnote(inmsg.data2,56);
             if (row < 5) {
-              <<< ticks >>>;
-            128*(8*row+col) => pos; 3 => q;
+              eightbar_offset() => offset;
+              128*(8*row+col) => pos;
             } // eightbars
-            else if (row == 5) { 128*eightbars+16*col => pos; 2 => q; } // bars
-            else { 16*bars+8*(row-6)+col => pos; 1 => q; } // 16th
-            if (quant == 0) { 0 => q; }
-            spork ~ seek(pos,q);
-            //spork ~ loop();
+            else if (row == 5) {
+              bar_offset() => offset;
+              128*eightbars()$int+16*col => pos;
+            } // bars
+            else {
+              tick_offset() => offset;
+              16*bars()$int+8*(row-6)+col => pos;
+            } // 16th
+            (44100*15*pos/bpm)$int => pos;
+            if (quant == 0) { pos => buffer.pos; }
+            else { 
+              pos + offset => buffer.pos;
+            }
+            1 => buffer.play;
+            1 => quant;
           }
         }
 
@@ -214,13 +183,9 @@ fun void listen() {
 
       else if (inmsg.data1 == 176 && inmsg.data3 == 127) { // 1-8 press
         inmsg.data2-104 => int i;
-        <<< nr_files >>>;
-        <<< i, files[i] >>>;
         if (i < nr_files) {
           0 => buffer.play;
-          <<< files[i] >>>;
           files[i] => buffer.read;
-          (bpm*buffer.samples()/(8*240*44100)) $ int => nr_8bars;
           reset();
           sendcc(inmsg.data2,60);
           sendcc(lasttrack,29);
@@ -236,7 +201,7 @@ fun void listen() {
   }
 }
 
-spork ~ ticker();
-spork ~ listen();
+spork ~ view();
+spork ~ controller();
 
 while (true) { minute => now; }
