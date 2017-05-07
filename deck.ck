@@ -42,7 +42,7 @@ buffer => dac;
 
 132.0 => float bpm;
 1.0 => float rate;
-0 => int quant;
+1 => int quant;
 
 0 => int led_16th;
 0 => int last16th;
@@ -58,13 +58,9 @@ fun float ticks() { return bpm*buffer.pos()/44100/15; }
 fun float bars() { return ticks()/16; }
 fun float eightbars() { return ticks()/128; }
 
-//fun int eightbar_offset() { return buffer.pos() - eightbars()$int * 128*ticksamples(); }
-//fun int bar_offset() { return buffer.pos() - bars()$int * 16*ticksamples(); }
-//fun int tick_offset() { return buffer.pos() - ticks()$int * ticksamples(); }
-
-fun int eightbar_offset() { return (eightbars()$int+1) * 128*ticksamples() - buffer.pos() ; }
-fun int bar_offset() { return (bars()$int+1) * 16*ticksamples() - buffer.pos() ; }
-fun int tick_offset() { return (ticks()$int+1) * ticksamples() - buffer.pos() ; }
+fun int eightbar_offset() { return buffer.pos() - eightbars()$int * 128*ticksamples(); }
+fun int bar_offset() { return buffer.pos() - bars()$int * 16*ticksamples(); }
+fun int tick_offset() { return buffer.pos() - ticks()$int * ticksamples(); }
 
 fun int nr_8bars() { return Math.ceil(bpm*buffer.samples()/(8*240*44100)) $ int; }
 
@@ -166,12 +162,9 @@ fun void controller() {
             } // 16th
             (44100*15*pos/bpm)$int => pos;
             if (quant == 0) { 0 => offset; }
-            spork ~ seek(pos,offset);
-            //else { 
-              //pos + offset => buffer.pos;
-            //}
+            pos + offset => buffer.pos;
             1 => buffer.play;
-            1 => quant;
+            //1 => quant;
           }
         }
 
