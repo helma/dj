@@ -1,10 +1,12 @@
+/* TODO
+play/loop 16th and restart at correct position
+*/
 // midi
-//Std.atoi(Std.getenv("LAUNCHPAD")) => int launchpad;
 MidiIn midiin;
-midiin.open(1);
+midiin.open(Std.atoi(me.arg(0)));
 MidiMsg inmsg;
 MidiOut midiout;
-midiout.open(1);
+midiout.open(Std.atoi(me.arg(0)));
 MidiMsg outmsg;
 
 fun void sendcc(int d2,int d3) {
@@ -41,7 +43,6 @@ SndBuf2 buffer;
 buffer => dac;
 
 132.0 => float bpm;
-1.0 => float rate;
 1 => int quant;
 
 0 => int led_16th;
@@ -64,12 +65,6 @@ fun int tick_offset() { return buffer.pos() - ticks()$int * ticksamples(); }
 
 fun int nr_8bars() { return Math.ceil(bpm*buffer.samples()/(8*240*44100)) $ int; }
 
-fun void setrate(float r) {
-  tickdur() => now;
-  r => rate;
-  r => buffer.rate;
-}
-
 fun void reset() {
   0 => buffer.play;
   0 => buffer.pos;
@@ -82,7 +77,7 @@ fun void reset() {
   0 => int lastbar;
   0 => int led_8bars;
   0 => int last8;
-  for (0 => int r; r < 4; r++) {
+  for (0 => int r; r < 5; r++) {
     for (0 => int c; c < 8; c++) {
       if (n <= nr_8bars()) { sendnote(16*r+c,29); }
       else { sendnote(16*r+c,12); }
@@ -91,6 +86,9 @@ fun void reset() {
   }
   sendnote(0,60);
 }
+
+sendnote(24,28);
+sendnote(40,13);
 
 fun void view() {
 
@@ -123,11 +121,6 @@ fun void view() {
   }
 }
 
-fun void seek(int pos,int wait) {
-  wait*1::samp => now;
-  pos => buffer.pos;
-}
-
 fun void controller() {
 
   0 => int pos;
@@ -147,24 +140,14 @@ fun void controller() {
         
         if (col < 8) { // grid
           if (inmsg.data3 == 127) { // press
-            //sendnote(inmsg.data2,56);
             if (row < 5) {
-              eightbar_offset() => offset;
+              if (quant == 0) { 0 => offset; }
+              else { eightbar_offset() => offset; }
               128*(8*row+col) => pos;
+              (44100*15*pos/bpm)$int => pos;
+              pos + offset => buffer.pos;
+              1 => buffer.play;
             } // eightbars
-            else if (row == 5) {
-              bar_offset() => offset;
-              128*eightbars()$int+16*col => pos;
-            } // bars
-            else {
-              tick_offset() => offset;
-              16*bars()$int+8*(row-6)+col => pos;
-            } // 16th
-            (44100*15*pos/bpm)$int => pos;
-            if (quant == 0) { 0 => offset; }
-            pos + offset => buffer.pos;
-            1 => buffer.play;
-            //1 => quant;
           }
         }
 
@@ -174,12 +157,12 @@ fun void controller() {
             else if (inmsg.data3 == 0) { 1 => quant; } // release
           }
           else if (row == 1) { // B
-            if (inmsg.data3 == 127) { setrate(1.04); } // press
-            else if (inmsg.data3 == 0) { setrate(1.0); } // release
+            if (inmsg.data3 == 127) { 1.04 => buffer.rate; } // press
+            else if (inmsg.data3 == 0) { 1 => buffer.rate; } // release
           }
           else if (row == 2) { // C
-            if (inmsg.data3 == 127) { setrate(0.96); } // press
-            else if (inmsg.data3 == 0) { setrate(1.0); } // release
+            if (inmsg.data3 == 127) { 0.96 => buffer.rate; } // press
+            else if (inmsg.data3 == 0) { 1 => buffer.rate; } // release
           }
         }
       }
