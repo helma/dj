@@ -87,8 +87,14 @@ fun void reset() {
   sendnote(0,60);
 }
 
-sendnote(24,28);
-sendnote(40,13);
+fun void seek(int ticks, int offset) {
+  (44100*15*ticks/bpm)$int + offset => buffer.pos;
+  1 => buffer.play;
+}
+
+sendnote(72,28);
+sendnote(88,13);
+sendnote(120,62);
 
 fun void view() {
 
@@ -102,20 +108,20 @@ fun void view() {
       sendnote(led_16th,60);
       led_16th => last16th;
 
-        bars() $ int % 8 + 80 => led_bars;
-        if ( lastbar != led_bars) { sendnote(lastbar,12); }
-        sendnote(led_bars,60);
-        led_bars => lastbar;
+      bars() $ int % 8 + 80 => led_bars;
+      if ( lastbar != led_bars) { sendnote(lastbar,12); }
+      sendnote(led_bars,60);
+      led_bars => lastbar;
 
-        eightbars() $ int %8 => int col;
-        eightbars() $ int /8 => int row;
-        16*row+col => led_8bars;
-        if (eightbars() <= nr_8bars()) {
-          if (last8 != led_8bars) { sendnote(last8,29); }
-          sendnote(led_8bars,60);
-          led_8bars => last8;
-        }
-        else { reset(); }
+      eightbars() $ int %8 => int col;
+      eightbars() $ int /8 => int row;
+      16*row+col => led_8bars;
+      if (eightbars() <= nr_8bars()) {
+        if (last8 != led_8bars) { sendnote(last8,29); }
+        sendnote(led_8bars,60);
+        led_8bars => last8;
+      }
+      else { reset(); }
     }
     tickdur() => now;
   }
@@ -140,29 +146,32 @@ fun void controller() {
         
         if (col < 8) { // grid
           if (inmsg.data3 == 127) { // press
-            if (row < 5) {
-              if (quant == 0) { 0 => offset; }
-              else { eightbar_offset() => offset; }
+            if (row < 5) {  // eightbars
               128*(8*row+col) => pos;
-              (44100*15*pos/bpm)$int => pos;
-              pos + offset => buffer.pos;
-              1 => buffer.play;
-            } // eightbars
+              if (quant == 0) { seek(pos,0); }
+              else { seek(pos,eightbar_offset()); }
+            }
+            if (row > 5 && quant == 1) { // 16th
+              16*bars()$int+8*(row-6)+col => pos;
+              seek(pos,tick_offset());
+            }
           }
         }
 
         else if (col == 8) { // A-H
-          if (row == 0) { // A
-            if (inmsg.data3 == 127) { 0 => quant; } // press
-            else if (inmsg.data3 == 0) { 1 => quant; } // release
+          if (row < 4) { // A-D, banks
           }
-          else if (row == 1) { // B
+          else if (row == 4) { // E
             if (inmsg.data3 == 127) { 1.04 => buffer.rate; } // press
             else if (inmsg.data3 == 0) { 1 => buffer.rate; } // release
           }
-          else if (row == 2) { // C
+          else if (row == 5) { // F
             if (inmsg.data3 == 127) { 0.96 => buffer.rate; } // press
             else if (inmsg.data3 == 0) { 1 => buffer.rate; } // release
+          }
+          else if (row == 7) { // H
+            if (inmsg.data3 == 127) { 0 => quant; } // press
+            else if (inmsg.data3 == 0) { 1 => quant; } // release
           }
         }
       }
