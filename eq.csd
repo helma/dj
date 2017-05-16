@@ -27,6 +27,12 @@ kmongain  ctrl14      1, 4, 36, 0, 1
           initc14     1, 7, 39, 0
 kmaingain ctrl14      1, 7, 39, 0, 1
 
+; buttons
+          initc7     1, 68, 1
+kmonmute  ctrl7      1, 68, 1, 0
+          initc7     1, 71, 0
+kmainmute ctrl7      1, 71, 1, 0
+
 ; initialize sc4
           outic 1, 0, 0, 0, 124 ; hpf
           outic 1, 32, 0, 0, 124 ; hpf
@@ -38,6 +44,9 @@ kmaingain ctrl14      1, 7, 39, 0, 1
           outic 1, 36, 0, 0, 1
           outic 1, 7, 0, 0, 1 ; main
           outic 1, 39, 0, 0, 1 ; 
+
+          outic 1, 68, 1, 1, 0 ; monitor mute
+          outic 1, 71, 0, 1, 0 ; main mute
 
 ; frequency conversion
 khpf      cpsmidinn  khpn
@@ -70,7 +79,7 @@ alp2      moogladder   aeq2, klpf, 0
 ;alp1      mvclpf3   aeq1, klpf, klpq
 ;alp2      mvclpf3   aeq2, klpf, klpq
 endif
-          outc         kmaingain*alp1, kmaingain*alp2, kmongain*alp1, kmongain*alp2
+          outc         kmainmute*kmaingain*alp1, kmainmute*kmaingain*alp2, kmonmute*kmongain*alp1, kmonmute*kmongain*alp2
 
 endin
 
