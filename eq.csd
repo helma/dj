@@ -1,14 +1,14 @@
 <CsoundSynthesizer>
 <CsOptions>
 -+rtaudio=jack -b 128 -B 1048 -i adc -o dac -+jack_outportname=system:playback_
--+rtmidi=alsa -Mhw:3,0,0 ; input
--Qhw:3,0,0 ; output
+-+rtmidi=alsa -Mhw:2,0,0 ; input
+-Qhw:2,0,0 ; output
 </CsOptions>
 <CsInstruments>
 
 sr = 44100
 ksmps = 32
-nchnls = 4
+nchnls = 2
 0dbfs = 1
 
 instr eq
@@ -28,8 +28,14 @@ kmongain  ctrl14      1, 4, 36, 0, 1
 kmaingain ctrl14      1, 7, 39, 0, 1
 
 ; buttons
-          initc7     1, 68, 1
-kmonmute  ctrl7      1, 68, 1, 0
+          initc7     1, 64, 0
+khpmute   ctrl7      1, 64, 0, 1
+          initc7     1, 66, 1
+keqmute   ctrl7      1, 66, 1, 0
+          initc7     1, 67, 0
+klpmute   ctrl7      1, 67, 0, 1
+;          initc7     1, 68, 1
+;kmonmute  ctrl7      1, 68, 1, 0
           initc7     1, 71, 0
 kmainmute ctrl7      1, 71, 1, 0
 
@@ -45,6 +51,9 @@ kmainmute ctrl7      1, 71, 1, 0
           outic 1, 7, 0, 0, 1 ; main
           outic 1, 39, 0, 0, 1 ; 
 
+          outic 1, 64, 0, 0, 1 ; lpf mute
+          outic 1, 66, 1, 1, 0 ; eq mute
+          outic 1, 67, 0, 0, 1 ; hpf mute
           outic 1, 68, 1, 1, 0 ; monitor mute
           outic 1, 71, 0, 1, 0 ; main mute
 
@@ -57,7 +66,7 @@ kbw       =          kcf/2 ; bw = f/q;  q=1
 ain1,ain2 ins
 
 ; highpass
-if (khpn == 0) then ; turn off hpf
+if (khpn == 0 || khpmute == 1) then ; turn off hpf
 ahp1      =   ain1
 ahp2      =   ain2
 else
@@ -66,11 +75,11 @@ ahp2      mvchpf     ain2, khpf
 endif
 
 ; eq
-aeq1    	eqfil      ahp1, kcf, kbw, kgain
-aeq2    	eqfil      ahp2, kcf, kbw, kgain
+aeq1    	eqfil      ahp1, kcf, kbw, kgain*keqmute
+aeq2    	eqfil      ahp2, kcf, kbw, kgain*keqmute
 
 ; lowpass
-if (klpn == 127) then ; turn off lpf
+if (klpn == 127 || klpmute == 1) then ; turn off lpf
 alp1      =   aeq1
 alp2      =   aeq2
 else
@@ -79,7 +88,8 @@ alp2      moogladder   aeq2, klpf, 0
 ;alp1      mvclpf3   aeq1, klpf, klpq
 ;alp2      mvclpf3   aeq2, klpf, klpq
 endif
-          outc         kmainmute*kmaingain*alp1, kmainmute*kmaingain*alp2, kmonmute*kmongain*alp1, kmonmute*kmongain*alp2
+          ;outc         kmainmute*kmaingain*alp1, kmainmute*kmaingain*alp2, kmonmute*kmongain*alp1, kmonmute*kmongain*alp2
+          outc         kmainmute*kmaingain*alp1, kmainmute*kmaingain*alp2
 
 endin
 
