@@ -27,8 +27,15 @@ sendcc(0,0); // reset
 sendcc(0,40); // LED flashing
 
 // files
-string files[8];
+0 => int bank;
+0 => int track;
+"/home/ch/music/live/dj/" => string dir;
+/*
+string files[4][8][4];
 FileIO fio;
+for( 0 => int bnk; bnk < 4; bnk++ ) { // banks
+  for( 0 => int trk; trk < 8; trk++ ) { // tracks
+    for( 0 => int stm; stm < 4; stm++ ) { // stems
 fio.open("/home/ch/music/live/dj/playlist.m3u", FileIO.READ);
 0 => int nr_files;
 while( fio.more() && nr_files < 8 ) {
@@ -36,11 +43,17 @@ while( fio.more() && nr_files < 8 ) {
   sendcc(nr_files+104,29);
   nr_files+1 => nr_files;
 }
+*/
 
-// buffer
-SndBuf2 buffer; 
-0 => buffer.play;
-buffer => dac;
+// stems
+SndBuf2 stems[4]; 
+for (0=>int i; i<4; i++) { 
+  0 => stems[i].play;
+  0 => stems[i].channel;
+  stems[i] => dac.chan(i*2);
+  1 => stems[i].channel;
+  stems[i] => dac.chan(i*2+1);
+}
 
 132.0 => float bpm;
 1 => int quant;
@@ -55,32 +68,37 @@ buffer => dac;
 fun dur tickdur() { return 15::second/bpm; }
 fun int ticksamples() { return 44100*15/bpm $ int; }
 
-fun float ticks() { return bpm*buffer.pos()/44100/15; }
+fun float ticks() { return bpm*stems[0].pos()/44100/15; }
 fun float bars() { return ticks()/16; }
 fun float eightbars() { return ticks()/128; }
 
-fun int eightbar_offset() { return buffer.pos() - eightbars()$int * 128*ticksamples(); }
-fun int bar_offset() { return buffer.pos() - bars()$int * 16*ticksamples(); }
-fun int tick_offset() { return buffer.pos() - ticks()$int * ticksamples(); }
+fun int eightbar_offset() { return stems[0].pos() - eightbars()$int * 128*ticksamples(); }
+fun int bar_offset() { return stems[0].pos() - bars()$int * 16*ticksamples(); }
+fun int tick_offset() { return stems[0].pos() - ticks()$int * ticksamples(); }
 
-fun int nr_8bars() { return Math.ceil(bpm*buffer.samples()/(8*240*44100)) $ int; }
+fun int nr_8bars() { return Math.ceil(bpm*stems[0].samples()/(8*240*44100)) $ int; }
+
+fun void stop() {
+  for (0=>int i; i<4; i++) { 0 => stems[i].play; }
+  for (0 => int r; r < 5; r++) { // clear track display
+    for (0 => int c; c < 8; c++) { sendnote(16*r+c,12); }
+  }
+}
 
 fun void reset() {
-  0 => buffer.play;
-  0 => buffer.pos;
   0 => int quant;
-  0 => int n;
-
   0 => int led_16th;
   0 => int last16th;
   0 => int led_bars;
   0 => int lastbar;
   0 => int led_8bars;
   0 => int last8;
+  for (0=>int i; i<4; i++) { 0 => stems[i].pos; }
+  0 => int n;
   for (0 => int r; r < 5; r++) {
     for (0 => int c; c < 8; c++) {
       if (n <= nr_8bars()) { sendnote(16*r+c,29); }
-      else { sendnote(16*r+c,12); }
+      //else { sendnote(16*r+c,12); }
       n++;
     }
   }
@@ -88,8 +106,14 @@ fun void reset() {
 }
 
 fun void seek(int ticks, int offset) {
-  (44100*15*ticks/bpm)$int + offset => buffer.pos;
-  1 => buffer.play;
+  for (0=>int i; i<4; i++) { 
+    (44100*15*ticks/bpm)$int + offset => stems[i].pos;
+    1 => stems[i].play;
+  }
+}
+
+fun void rate(float r) {
+  for (0=>int i; i<4; i++) { r => stems[i].rate; }
 }
 
 sendnote(72,28);
@@ -99,7 +123,7 @@ sendnote(120,62);
 fun void view() {
 
   while (true) {
-    if (buffer.play() == 1) { 
+    if (stems[0].play() == 1) { 
 
       ticks() $ int % 16 => led_16th;
       if (led_16th > 7) { led_16th + 104 => led_16th; }
@@ -121,7 +145,7 @@ fun void view() {
         sendnote(led_8bars,60);
         led_8bars => last8;
       }
-      else { reset(); }
+      else { stop(); }
     }
     tickdur() => now;
   }
@@ -160,14 +184,18 @@ fun void controller() {
 
         else if (col == 8) { // A-H
           if (row < 4) { // A-D, banks
+            if (inmsg.data3 == 127) { // press
+              row => bank;
+              sendnote(inmsg.data2,29);
+            }
           }
           else if (row == 4) { // E
-            if (inmsg.data3 == 127) { 1.04 => buffer.rate; } // press
-            else if (inmsg.data3 == 0) { 1 => buffer.rate; } // release
+            if (inmsg.data3 == 127) { rate(1.04); } // press
+            else if (inmsg.data3 == 0) { rate(1.0); } // release
           }
           else if (row == 5) { // F
-            if (inmsg.data3 == 127) { 0.96 => buffer.rate; } // press
-            else if (inmsg.data3 == 0) { 1 => buffer.rate; } // release
+            if (inmsg.data3 == 127) { rate(0.96); } // press
+            else if (inmsg.data3 == 0) { rate(1.0); } // release
           }
           else if (row == 7) { // H
             if (inmsg.data3 == 127) { 0 => quant; } // press
@@ -177,19 +205,24 @@ fun void controller() {
       }
 
       else if (inmsg.data1 == 176 && inmsg.data3 == 127) { // 1-8 press
-        inmsg.data2-104 => int i;
-        if (i < nr_files) {
-          0 => buffer.play;
-          files[i] => buffer.read;
+        inmsg.data2-104 => int t;
+        //if (i < nr_files) {
+          stop();
+          <<< "load" >>>;
+          for (0=>int s; s<4; s++) {
+            dir + bank + "/" + t + "/" + s + ".wav" => string file;
+            <<< file >>>;
+            file => stems[s].read;
+          }
           reset();
-          sendcc(inmsg.data2,60);
-          sendcc(lasttrack,29);
-          inmsg.data2 => lasttrack;
-        }
-        else {
-          sendcc(lasttrack,29);
-          reset();
-        }
+          //sendcc(inmsg.data2,60);
+          //sendcc(lasttrack,29);
+          //inmsg.data2 => lasttrack;
+        //}
+        //else {
+          //sendcc(lasttrack,29);
+          //reset();
+        //}
       }
 
     }
