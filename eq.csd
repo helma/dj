@@ -1,8 +1,8 @@
 <CsoundSynthesizer>
 <CsOptions>
 -+rtaudio=jack -b 128 -B 1048 -i adc -o dac -+jack_outportname=system:playback_
--+rtmidi=alsa -Mhw:2,0,0 ; input
--Qhw:2,0,0 ; output
+-+rtmidi=alsa -Mhw:3,0,0 ; input
+-Qhw:3,0,0 ; output
 </CsOptions>
 <CsInstruments>
 
