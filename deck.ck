@@ -1,6 +1,3 @@
-/* TODO
-play/loop 16th and restart at correct position
-*/
 // midi
 MidiIn midiin;
 midiin.open(Std.atoi(me.arg(0)));
@@ -26,24 +23,18 @@ fun void sendnote(int d2,int d3) {
 sendcc(0,0); // reset
 sendcc(0,40); // LED flashing
 
+sendnote(72,28); // E
+sendnote(88,13); // F
+sendnote(120,62); // H
+
 // files
 0 => int bank;
 0 => int track;
 "/home/ch/music/live/dj/" => string dir;
-/*
-string files[4][8][4];
-FileIO fio;
-for( 0 => int bnk; bnk < 4; bnk++ ) { // banks
-  for( 0 => int trk; trk < 8; trk++ ) { // tracks
-    for( 0 => int stm; stm < 4; stm++ ) { // stems
-fio.open("/home/ch/music/live/dj/playlist.m3u", FileIO.READ);
-0 => int nr_files;
-while( fio.more() && nr_files < 8 ) {
-  fio.readLine() => files[nr_files];
-  sendcc(nr_files+104,29);
-  nr_files+1 => nr_files;
-}
-*/
+
+// OSC
+OscSend xmit;
+xmit.setHost( "localhost", 9090);
 
 // stems
 SndBuf2 stems[4]; 
@@ -106,19 +97,17 @@ fun void reset() {
 }
 
 fun void seek(int ticks, int offset) {
+  <<< ticks, offset >>>;
   for (0=>int i; i<4; i++) { 
     (44100*15*ticks/bpm)$int + offset => stems[i].pos;
     1 => stems[i].play;
   }
+  <<< stems[0].play() >>>;
 }
 
 fun void rate(float r) {
   for (0=>int i; i<4; i++) { r => stems[i].rate; }
 }
-
-sendnote(72,28);
-sendnote(88,13);
-sendnote(120,62);
 
 fun void view() {
 
@@ -146,6 +135,9 @@ fun void view() {
         led_8bars => last8;
       }
       else { stop(); }
+
+      xmit.startMsg( "/phase", "f" );
+      stems[0].phase() => xmit.addFloat;
     }
     tickdur() => now;
   }
@@ -160,7 +152,6 @@ fun void controller() {
   while ( true ) {
 
     midiin => now;
-
     while( midiin.recv(inmsg) ) {
 
       if (inmsg.data1 == 144) { // note
@@ -215,14 +206,9 @@ fun void controller() {
             file => stems[s].read;
           }
           reset();
-          //sendcc(inmsg.data2,60);
-          //sendcc(lasttrack,29);
-          //inmsg.data2 => lasttrack;
-        //}
-        //else {
-          //sendcc(lasttrack,29);
-          //reset();
-        //}
+          xmit.startMsg( "/load, i, i" );
+          bank => xmit.addInt;
+          t => xmit.addInt;
       }
 
     }

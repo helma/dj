@@ -23,64 +23,43 @@ end
 =end
 
 looprange = Rectangle.new(0, 0, 0, h, [0,1,0,0.5])
-cursor = Rectangle.new(0, 0, 1, h, "red")
+@cursor = Rectangle.new(0, 0, 1, h, "red")
 
 tick = 0
 
-#on key: 'escape' do
-#  close
-#end
-# this works
-#require 'socket' 
-#@oscclient = UDPSocket.new
-#p OSC::Message.new("/get/position","test").encode
-#@oscclient.send(OSC::Message.new("/get/position","test").encode,0,"localhost",9669)
+on key: 'escape' do
+  close
+end
 
 include OSC
 thr = Thread.new do
-OSC.run do
-  server = Server.new 9090
-  server.add_pattern "/load" do |*args|
-    bank = args[1]
-    track = args[2]
-    Dir["/home/ch/music/live/dj/#{args[1]}/#{args[2]}/[0-3].wav"].each_with_index do |st,i|
-      img = st.sub('wav','png')
-      unless File.exists?(img) 
-      p img
-        `ffmpeg -i "#{st}" -filter_complex 'showwavespic=s=#{w}x#{h/4}:colors=white[a];color=s=#{w}x#{h/4}:color=black[b];[b][a]overlay'  -frames:v 1 "#{img}"`
+  OSC.run do
+    server = Server.new 9090
+
+    server.add_pattern "/load" do |*args|
+      bank = args[1]
+      track = args[2]
+      Dir["/home/ch/music/live/dj/#{args[1]}/#{args[2]}/[0-3].wav"].each_with_index do |st,i|
+        img = st.sub('wav','png')
+        unless File.exists?(img) 
+          `ffmpeg -i "#{st}" -filter_complex 'showwavespic=s=#{w}x#{h/4}:colors=white[a];color=s=#{w}x#{h/4}:color=black[b];[b][a]overlay'  -frames:v 1 "#{img}"`
+        end
+        stem = Image.new(0,i*h/4,img)
+        stem.width = w
+        stem.height = h/4
       end
-      stem = Image.new(0,i*h/4,img)
-      stem.width = w
-      stem.height = h/4
+      @cursor = Rectangle.new(0, 0, 1, h, "red")
     end
-    #cursor.x = args[1]
-    p bank, track
-  end
-  server.add_pattern "/position" do |*args|
-    cursor.x = args[1]
-    p "%r{foo/.*}: #{ args.join(', ') }"
-  end
 
-  server.add_pattern "/foo/bar" do |*args| # this will just match /foo/bar address
-    p "'/foo/bar': #{ args.join(', ') }"
-  end
+    server.add_pattern "/phase" do |*args|
+      p args[1]*w
+      @cursor.x = args[1]*w
+    end
 
-  server.add_pattern "/exit" do |*args|    # this will just match /exit address
-    exit
+    server.add_pattern "/exit" do |*args|    # this will just match /exit address
+      exit
+    end
   end
 end
-end
-
-=begin
-update do
-  # get loop
-  # get position
-  #if tick % 60 == 0
-    cursor.x = tick
-    #set background: 'random'
-  #end
-  tick += 1
-end
-=end
 
 show
