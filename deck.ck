@@ -1,3 +1,4 @@
+// TODO fix duplicated events
 // midi
 MidiIn midiin;
 midiin.open(Std.atoi(me.arg(0)));
@@ -23,18 +24,19 @@ fun void sendnote(int d2,int d3) {
 sendcc(0,0); // reset
 sendcc(0,40); // LED flashing
 
-sendnote(72,28); // E
+sendnote(72,12); // E
 sendnote(88,13); // F
+sendnote(104,28); // G
 sendnote(120,62); // H
+
+// OSC
+OscSend xmit;
+xmit.setHost( "localhost", 9090);
 
 // files
 0 => int bank;
 0 => int track;
 "/home/ch/music/live/dj/" => string dir;
-
-// OSC
-OscSend xmit;
-xmit.setHost( "localhost", 9090);
 
 // stems
 SndBuf2 stems[4]; 
@@ -47,108 +49,110 @@ for (0=>int i; i<4; i++) {
 }
 
 132.0 => float bpm;
-1 => int quant;
+8 => int ticks_bar;
+0 => int quant;
+0 => int loop;
+0 => int loop_in;
+0 => int loop_out;
 
-0 => int led_16th;
-0 => int last16th;
-0 => int led_bars;
-0 => int lastbar;
-0 => int led_8bars;
-0 => int last8;
+fun float tickratio() { return 240/ticks_bar/bpm; }
+fun dur tickdur() { return 1::second*tickratio(); }
+fun float ticksamples() { return 44100*tickratio(); }
 
-fun dur tickdur() { return 15::second/bpm; }
-fun int ticksamples() { return 44100*15/bpm $ int; }
+fun float ticks() { return stems[0].pos()/ticksamples(); }
+fun float bars() { return ticks()/ticks_bar; }
+fun float eightbars() { return ticks()/8/ticks_bar; }
 
-fun float ticks() { return bpm*stems[0].pos()/44100/15; }
-fun float bars() { return ticks()/16; }
-fun float eightbars() { return ticks()/128; }
+fun int eightbar_offset() { return stems[0].pos() - eightbars()$int * 8*ticks_bar*ticksamples()$int; }
+fun int bar_offset() { return stems[0].pos() - bars()$int * ticks_bar*ticksamples()$int; }
+fun int tick_offset() { return stems[0].pos() - ticks()$int * ticksamples()$int; }
 
-fun int eightbar_offset() { return stems[0].pos() - eightbars()$int * 128*ticksamples(); }
-fun int bar_offset() { return stems[0].pos() - bars()$int * 16*ticksamples(); }
-fun int tick_offset() { return stems[0].pos() - ticks()$int * ticksamples(); }
-
-fun int nr_8bars() { return Math.ceil(bpm*stems[0].samples()/(8*240*44100)) $ int; }
+fun int nr_8bars() { return Math.ceil(stems[0].samples()/ticksamples()/8/ticks_bar) $ int; }
 
 fun void stop() {
-  for (0=>int i; i<4; i++) { 0 => stems[i].play; }
+  for (0=>int i; i<4; i++) {
+    0 => stems[i].play;
+    0 => stems[i].pos;
+  }
+  0 => int quant;
+  0 => int loop;
+  0 => int loop_in;
+  0 => int loop_out;
   for (0 => int r; r < 5; r++) { // clear track display
     for (0 => int c; c < 8; c++) { sendnote(16*r+c,12); }
   }
 }
 
-fun void reset() {
-  0 => int quant;
-  0 => int led_16th;
-  0 => int last16th;
-  0 => int led_bars;
-  0 => int lastbar;
-  0 => int led_8bars;
-  0 => int last8;
-  for (0=>int i; i<4; i++) { 0 => stems[i].pos; }
-  0 => int n;
-  for (0 => int r; r < 5; r++) {
-    for (0 => int c; c < 8; c++) {
-      if (n <= nr_8bars()) { sendnote(16*r+c,29); }
-      //else { sendnote(16*r+c,12); }
-      n++;
-    }
-  }
-  sendnote(0,60);
-}
-
 fun void seek(int ticks, int offset) {
-  <<< ticks, offset >>>;
   for (0=>int i; i<4; i++) { 
-    (44100*15*ticks/bpm)$int + offset => stems[i].pos;
+    (ticks*ticksamples())$int + offset => stems[i].pos;
     1 => stems[i].play;
   }
-  <<< stems[0].play() >>>;
 }
 
-fun void rate(float r) {
-  for (0=>int i; i<4; i++) { r => stems[i].rate; }
-}
+fun void rate(float r) { for (0=>int i; i<4; i++) { r => stems[i].rate; } }
 
 fun void view() {
-
+<<< "view" >>>;
   while (true) {
-    if (stems[0].play() == 1) { 
 
-      ticks() $ int % 16 => led_16th;
-      if (led_16th > 7) { led_16th + 104 => led_16th; }
-      else { led_16th + 96 => led_16th; }
-      if (last16th != led_16th) { sendnote(last16th,12); }
-      sendnote(led_16th,60);
-      led_16th => last16th;
+    ticks()$int % ticks_bar + 112 => int led_ticks;
+    for (112 => int n; n < 120; n++) {
+      if (n == led_ticks) { sendnote(n,60); }
+      else { sendnote(n,12); }
+    }
 
-      bars() $ int % 8 + 80 => led_bars;
-      if ( lastbar != led_bars) { sendnote(lastbar,12); }
-      sendnote(led_bars,60);
-      led_bars => lastbar;
+    bars()$int % 8 + 96 => int led_bars;
+    for (96 => int n; n < 104; n++) {
+      if (n == led_bars) { sendnote(n,60); }
+      else { sendnote(n,12); }
+    }
 
-      eightbars() $ int %8 => int col;
-      eightbars() $ int /8 => int row;
-      16*row+col => led_8bars;
-      if (eightbars() <= nr_8bars()) {
-        if (last8 != led_8bars) { sendnote(last8,29); }
-        sendnote(led_8bars,60);
-        led_8bars => last8;
+    eightbars()$int %8 => int col;
+    eightbars()$int /8 => int row;
+    16*row+col => int led_8bars;
+    for (0 => int r; r < 6; r++) {
+      for (0 => int c; c < 8; c++) {
+        16*r+c => int n;
+        if (n <= nr_8bars()) {
+          if (n == led_8bars) { sendnote(led_8bars,60); }
+          else { sendnote(n,29); }
+        }
+        else { sendnote(n,12); }
       }
-      else { stop(); }
-
-      xmit.startMsg( "/phase", "f" );
-      stems[0].phase() => xmit.addFloat;
     }
     tickdur() => now;
   }
 }
 
+fun void osc_position() {
+<<< "OSC pos" >>>;
+  while (true) {
+    if (stems[0].play() == 1) {
+      xmit.startMsg( "/phase", "f" );
+      stems[0].phase() => xmit.addFloat;
+    }
+    30::ms => now; // ~ 30fps
+  }
+}
+
+fun void looper() {
+<<< "looper" >>>;
+  while (true) {
+  if (loop == 1 && loop_out > loop_in) {
+    if (stems[0].pos() == loop_out) {
+      for (0=>int i; i<4; i++) { loop_in => stems[i].pos; }
+    }
+  }
+  1::samp => now;
+  }
+}
+
 fun void controller() {
+<<< "controller" >>>;
 
-  0 => int pos;
-  0 => int offset;
-  0 => int lasttrack;
-
+  0 => int nextpos;
+  0 => int hold;
   while ( true ) {
 
     midiin => now;
@@ -160,16 +164,29 @@ fun void controller() {
         inmsg.data2/16 => int row;
         
         if (col < 8) { // grid
-          if (inmsg.data3 == 127) { // press
-            if (row < 5) {  // eightbars
-              128*(8*row+col) => pos;
-              if (quant == 0) { seek(pos,0); }
-              else { seek(pos,eightbar_offset()); }
+          if (row < 6) {  // eightbars
+            8*ticks_bar*(8*row+col) => nextpos;
+            if (inmsg.data3 == 127 && loop == 0) { // press
+              if (quant == 0) { seek(nextpos,0); }
+              else { seek(nextpos,eightbar_offset()); }
             }
-            if (row > 5 && quant == 1) { // 16th
-              16*bars()$int+8*(row-6)+col => pos;
-              seek(pos,tick_offset());
+            else if (inmsg.data3 == 127 && loop == 1) { // loop
+              if (hold == 0) { nextpos => loop_in; 1 => hold; }
+              else if (hold == 1) {
+                if (nextpos > loop_in) { nextpos => loop_out; }
+                else { loop_in => loop_out; nextpos => loop_in; }
+                <<< loop_in, loop_out >>>;
+                0 => hold;
+                xmit.startMsg( "/loop, f, f" );
+                loop_in/stems[0].samples() => xmit.addFloat;
+                loop_out/stems[0].samples() => xmit.addFloat;
+              }
             }
+            else if (inmsg.data3 == 0 && loop == 1) { 0 => hold; } // release
+          }
+          if (row == 7 && quant == 1) { // ticks
+            ticks_bar*bars()$int+8*(row-6)+col => nextpos;
+            seek(nextpos,tick_offset());
           }
         }
 
@@ -181,10 +198,14 @@ fun void controller() {
             }
           }
           else if (row == 4) { // E
+            if (loop == 1) { 0 => loop; sendnote(inmsg.data2,12); }
+            else { 1 => loop; sendnote(inmsg.data2,60); }
+          }
+          else if (row == 5) { // F
             if (inmsg.data3 == 127) { rate(1.04); } // press
             else if (inmsg.data3 == 0) { rate(1.0); } // release
           }
-          else if (row == 5) { // F
+          else if (row == 6) { // F
             if (inmsg.data3 == 127) { rate(0.96); } // press
             else if (inmsg.data3 == 0) { rate(1.0); } // release
           }
@@ -197,18 +218,21 @@ fun void controller() {
 
       else if (inmsg.data1 == 176 && inmsg.data3 == 127) { // 1-8 press
         inmsg.data2-104 => int t;
-        //if (i < nr_files) {
-          stop();
-          <<< "load" >>>;
-          for (0=>int s; s<4; s++) {
-            dir + bank + "/" + t + "/" + s + ".wav" => string file;
-            <<< file >>>;
-            file => stems[s].read;
+        stop();
+        for (0=>int s; s<4; s++) {
+          dir + bank + "/" + t + "/" + s + ".wav" => string file;
+          file => stems[s].read;
+        }
+        0 => int n;
+        for (0 => int r; r < 5; r++) {
+          for (0 => int c; c < 8; c++) {
+            if (n <= nr_8bars()) { sendnote(16*r+c,29); }
+            n++;
           }
-          reset();
-          xmit.startMsg( "/load, i, i" );
-          bank => xmit.addInt;
-          t => xmit.addInt;
+        }
+        xmit.startMsg( "/load, i, i" );
+        bank => xmit.addInt;
+        t => xmit.addInt;
       }
 
     }
@@ -216,6 +240,8 @@ fun void controller() {
 }
 
 spork ~ view();
-spork ~ controller();
+spork ~ osc_position();
+spork ~ looper();
+controller();
 
-while (true) { minute => now; }
+//while (true) { minute => now; }
