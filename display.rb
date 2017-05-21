@@ -18,7 +18,7 @@ eightbar_samples = 44100 * 8 * 8 * 30/bpm
 grid = []
 gridnr = 0
 
-looprange = Rectangle.new(0, 0, 0, h, [0,1,0,0.5])
+looprange = Rectangle.new(0, 0, 0, h, [0.3,0.3,0.3,0.5])
 cursor = Rectangle.new(0, 0, 0, h, "green")
 slice = Rectangle.new(0, 0, w*eightbar_samples/samples, h, [0.2,0.2,0.2,0.2])
 
@@ -56,6 +56,7 @@ on :key_down do |event|
   when 'a'
     dir = `ls -d ~/music/live/dj/* | dmenu -l 20`.chomp
     client.send Message.new('/load', dir)
+    clear
     Dir["#{dir}/[0-3].wav"].each_with_index do |st,i|
 
       if File.exists?(st)
@@ -66,9 +67,6 @@ on :key_down do |event|
         stems[i] = Image.new(0,i*h/4,img)
         stems[i].width = w
         stems[i].height = h/4
-      else
-        stems[i] = nil
-        stems[i] = Rectangle.new(0, i*h/4, w, h/4, "black")
       end
     end
     samples = `soxi "#{dir}/0.wav" |grep Duration|cut -d '=' -f2|sed  's/samples//'|tr -d " "`.to_i
@@ -81,7 +79,7 @@ on :key_down do |event|
     end
     slice = Rectangle.new(0, 0, w*eightbar_samples/samples, h, [0.5,0.5,0.5,0.5])
     cursor = Rectangle.new(0, 0, 1, h, "green")
-    looprange = Rectangle.new(0, 0, 0, h, [0.5,0.2,0.2,0.5])
+    looprange = Rectangle.new(0, 0, 0, h, [0.3,0.3,0.3,0.5])
   when '/'
     looping = !looping
     looping ? client.send(Message.new('/loop/on')) : client.send(Message.new('/loop/off'))
@@ -116,6 +114,7 @@ on :key_up do |event|
     client.send Message.new('/speed/normal')
   end
 end
+
 thr = Thread.new do
   OSC.run do
     server = Server.new 9090
