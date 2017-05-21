@@ -64,7 +64,7 @@ fun void looper() {
 <<< "looper" >>>;
   while (true) {
     if (loop == 1 && loop_out > loop_in) {
-      if (stems[0].pos() == loop_out) {
+      if (stems[0].pos() >= loop_out) {
         for (0=>int i; i<4; i++) { loop_in => stems[i].pos; }
       }
     }
@@ -73,6 +73,7 @@ fun void looper() {
 }
 
 fun void controller() {
+<<< "controller" >>>;
 
   OscIn oin;
   9091 => oin.port;
@@ -100,8 +101,8 @@ fun void controller() {
       else if (msg.address == "/loop/on") { 1 => loop; }
       else if (msg.address == "/loop/off") { 0 => loop; }
       else if (msg.address == "/loop/set/8bar") {
-        8*ticks_bar*msg.getInt(0) => loop_in;
-        8*ticks_bar*msg.getInt(1) => loop_out;
+        8*ticks_bar*ticksamples()$int*msg.getInt(0) => loop_in;
+        8*ticks_bar*ticksamples()$int*msg.getInt(1) => loop_out;
       }
       else if (msg.address == "/speed/up") { rate(1.04); }
       else if (msg.address == "/speed/down") { rate(0.96); }
