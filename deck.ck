@@ -64,7 +64,7 @@ fun void looper() {
 <<< "looper" >>>;
   while (true) {
     if (loop == 1 && loop_out > loop_in) {
-      if (stems[0].pos() >= loop_out) {
+      if (stems[0].pos() == loop_out) {
         for (0=>int i; i<4; i++) { loop_in => stems[i].pos; }
       }
     }

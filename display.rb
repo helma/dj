@@ -22,6 +22,7 @@ looprange = Rectangle.new(0, 0, 0, h, [0,1,0,0.5])
 cursor = Rectangle.new(0, 0, 0, h, "green")
 slice = Rectangle.new(0, 0, w*eightbar_samples/samples, h, [0.2,0.2,0.2,0.2])
 
+looping = false
 select_loop = false
 loop_in = 0
 loop_out = 0
@@ -36,10 +37,7 @@ on :mouse_move do |event|
 end
 
 on :mouse_down do |event|
-  gridnr = grid.index( grid.select{|g| event.x < g}.first)-1
   if select_loop
-    loop_in = gridnr
-    looprange.x = grid[loop_in]
   else
     case event.button
     when :left
@@ -48,15 +46,6 @@ on :mouse_down do |event|
       client.send Message.new('/goto/8bar', gridnr)
     end
   end
-end
-
-on :mouse_up do |event|
-  gridnr = grid.index( grid.select{|g| event.x < g}.first)
-  if select_loop
-    loop_out = gridnr
-  end
-  client.send Message.new('/loop/set/8bar', loop_in, loop_out)
-  select_loop = false
 end
 
 on :key_down do |event|
@@ -94,12 +83,22 @@ on :key_down do |event|
     cursor = Rectangle.new(0, 0, 1, h, "green")
     looprange = Rectangle.new(0, 0, 0, h, [0.5,0.2,0.2,0.5])
   when '/'
-    p "loop"
-    client.send Message.new('/loop/on')
+    looping = !looping
+    looping ? client.send(Message.new('/loop/on')) : client.send(Message.new('/loop/off'))
+    looping ? looprange.color = [0.5,0.2,0.2,0.5] : looprange.color = [0.3,0.3,0.3,0.5]
   when "left shift"
+    loop_in = gridnr
+    looprange.x = grid[loop_in]
+    looprange.width = grid[1]-grid[0]
     select_loop = true
+  when "backspace"
+    client.send Message.new('/stop')
   when 'space'
-    #select_loop = !select_loop
+    client.send Message.new('/goto/8bar', gridnr)
+  when 'right'
+    client.send Message.new('/speed/up')
+  when 'left'
+    client.send Message.new('/speed/down')
   else
     p event.key
   end
@@ -108,7 +107,13 @@ end
 on :key_up do |event|
   case event.key
   when "left shift"
+    loop_out = gridnr + 1
+    client.send Message.new('/loop/set/8bar', loop_in, loop_out)
     select_loop = false
+  when 'right'
+    client.send Message.new('/speed/normal')
+  when 'left'
+    client.send Message.new('/speed/normal')
   end
 end
 thr = Thread.new do
