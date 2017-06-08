@@ -28,12 +28,10 @@ loop_in = 0
 loop_out = 0
 
 on :mouse_move do |event|
-  gridnr = grid.index( grid.select{|g| event.x < g}.first)-1
-  if select_loop
-    looprange.width = grid[gridnr+1]-grid[loop_in]
-  else
-    slice.x = grid[gridnr]
-  end
+  gridnr = grid.index( grid.select{|g| event.x < g}.first)
+  gridnr = grid.size unless gridnr
+  gridnr -= 1
+  select_loop ? looprange.width = grid[gridnr+1]-grid[loop_in] : slice.x = grid[gridnr]
 end
 
 on :mouse_down do |event|
@@ -43,7 +41,7 @@ on :mouse_down do |event|
     when :left
       client.send Message.new('/goto/8bar/quant', gridnr)
     when :right
-      client.send Message.new('/goto/8bar', gridnr)
+      client.send Message.new('/goto/8bar/nextbar', gridnr)
     end
   end
 end
@@ -92,7 +90,7 @@ on :key_down do |event|
   when "backspace"
     client.send Message.new('/stop')
   when 'space'
-    client.send Message.new('/goto/8bar', gridnr)
+    client.send Message.new('/goto/8bar/now', gridnr)
   when 'right'
     client.send Message.new('/speed/up')
   when 'left'

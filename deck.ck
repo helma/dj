@@ -95,7 +95,10 @@ fun void controller() {
       else if (msg.address == "/goto/8bar/quant") {
         seek(8*ticks_bar*msg.getInt(0),eightbar_offset());
       }
-      else if (msg.address == "/goto/8bar") {
+      else if (msg.address == "/goto/8bar/nextbar") {
+        seek(8*ticks_bar*msg.getInt(0),eightbars()-eightbar_offset());
+      }
+      else if (msg.address == "/goto/8bar/now") {
         seek(8*ticks_bar*msg.getInt(0),0);
       }
       else if (msg.address == "/loop/on") { 1 => loop; }
@@ -104,8 +107,8 @@ fun void controller() {
         8*ticks_bar*ticksamples()$int*msg.getInt(0) => loop_in;
         8*ticks_bar*ticksamples()$int*msg.getInt(1) => loop_out;
       }
-      else if (msg.address == "/speed/up") { rate(1.04); }
-      else if (msg.address == "/speed/down") { rate(0.96); }
+      else if (msg.address == "/speed/up") { rate(1.02); }
+      else if (msg.address == "/speed/down") { rate(0.98); }
       else if (msg.address == "/speed/normal") { rate(1.0); }
       else if (msg.address == "/stop") { stop(); }
     }
