@@ -21,12 +21,15 @@ for (0=>int i; i<4; i++) {
 fun float tickratio() { return 240/ticks_bar/bpm; }
 fun dur tickdur() { return 1::second*tickratio(); }
 fun float ticksamples() { return 44100*tickratio(); }
+fun int eightbar_samples() { return 8*ticks_bar*ticksamples() $ int; }
+fun int bar_samples() { return ticks_bar*ticksamples() $ int; }
 
 fun float ticks() { return stems[0].pos()/ticksamples(); }
 fun float bars() { return ticks()/ticks_bar; }
 fun float eightbars() { return ticks()/8/ticks_bar; }
 
-fun int eightbar_offset() { return stems[0].pos() - eightbars()$int * 8*ticks_bar*ticksamples()$int; }
+fun int eightbar_offset() { return stems[0].pos() - eightbars()$int * eightbar_samples()$int; }
+fun int next_bar_offset() { return (bars()$int+1)*bar_samples() - stems[0].pos(); }
 fun int bar_offset() { return stems[0].pos() - bars()$int * ticks_bar*ticksamples()$int; }
 fun int tick_offset() { return stems[0].pos() - ticks()$int * ticksamples()$int; }
 
@@ -40,9 +43,9 @@ fun void stop() {
   0 => int loop_out;
 }
 
-fun void seek(int ticks, int offset) {
+fun void seek(int samples) {
   for (0=>int i; i<4; i++) { 
-    (ticks*ticksamples())$int + offset => stems[i].pos;
+    samples => stems[i].pos;
     1 => stems[i].play;
   }
 }
@@ -50,7 +53,6 @@ fun void seek(int ticks, int offset) {
 fun void rate(float r) { for (0=>int i; i<4; i++) { r => stems[i].rate; } }
 
 fun void position() {
-<<< "OSC pos" >>>;
   while (true) {
     if (stems[0].play() == 1) {
       xmit.startMsg( "/phase", "f" );
@@ -61,7 +63,6 @@ fun void position() {
 }
 
 fun void looper() {
-<<< "looper" >>>;
   while (true) {
     if (loop == 1 && loop_out > loop_in) {
       if (stems[0].pos() == loop_out) {
@@ -72,8 +73,12 @@ fun void looper() {
   }
 }
 
+fun void nextbar(int eightbar) {
+  next_bar_offset()*1::samp => now;
+  seek(eightbar*eightbar_samples());
+}
+
 fun void controller() {
-<<< "controller" >>>;
 
   OscIn oin;
   9091 => oin.port;
@@ -93,13 +98,13 @@ fun void controller() {
         }
       }
       else if (msg.address == "/goto/8bar/quant") {
-        seek(8*ticks_bar*msg.getInt(0),eightbar_offset());
+        seek(msg.getInt(0)*eightbar_samples()+eightbar_offset());
       }
       else if (msg.address == "/goto/8bar/nextbar") {
-        seek(8*ticks_bar*msg.getInt(0),eightbars()-eightbar_offset());
+      spork ~ nextbar(msg.getInt(0));
       }
       else if (msg.address == "/goto/8bar/now") {
-        seek(8*ticks_bar*msg.getInt(0),0);
+        seek(msg.getInt(0)*eightbar_samples());
       }
       else if (msg.address == "/loop/on") { 1 => loop; }
       else if (msg.address == "/loop/off") { 0 => loop; }
