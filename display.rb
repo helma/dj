@@ -73,7 +73,6 @@ class Stem
   end
 
   def loopend i
-    p i
     @loop.width = WIDTH*i*EIGHTBAR_SAMPLES/@samples - @loop.x
   end
 
@@ -197,15 +196,12 @@ thr = Thread.new do
       stems[args[1]].phase = args[2] if stems[args[1]]
     end
     server.add_pattern "/loop" do |*args|
-      p args
       stems[args[1]].loop args[2]
     end
     server.add_pattern "/loop/in" do |*args|
-      p args
       stems[args[1]].loopstart args[2]
     end
     server.add_pattern "/loop/out" do |*args|
-      p args
       stems[args[1]].loopend args[2]
     end
   end
