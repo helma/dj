@@ -22,7 +22,9 @@ class Stem {
 
   fun void connect(int i) {
     i => nr;
-    buf => dac;
+    //buf => dac;
+    buf => Gain g => dac;
+    0. => g.gain;
     //0 => buf.channel;
     //buf => dac.chan(nr*2);
     //1 => buf.channel;
@@ -45,6 +47,27 @@ class Stem {
   fun void seek(int samples) {
       samples => buf.pos;
       1 => buf.play;
+  }
+
+  fun void setloop(int l) {
+    l => loop;
+    xmit.startMsg( "/loop", "ii" );
+    nr => xmit.addInt;
+    loop => xmit.addInt;
+  }
+
+  fun void setloop_in(int eightbars) {
+    8*ticks_bar*ticksamples()$int*eightbars => loop_in;
+    xmit.startMsg( "/loop/in", "ii" );
+    nr => xmit.addInt;
+    eightbars => xmit.addInt;
+  }
+
+  fun void setloop_out(int eightbars) {
+    8*ticks_bar*ticksamples()$int*eightbars => loop_out;
+    xmit.startMsg( "/loop/out", "ii" );
+    nr => xmit.addInt;
+    eightbars => xmit.addInt;
   }
 
   fun void nextbar(int eightbar) {
@@ -89,9 +112,7 @@ Stem stems[4];
 for (0=>int i; i<4; i++) { stems[i].connect(i); }
 
 fun void stop() { for (0=>int i; i<4; i++) { stems[i].stop(); } }
-
 fun void seek(int samples) { for (0=>int i; i<4; i++) { stems[i].seek(samples); } }
-
 fun void rate(float r) { for (0=>int i; i<4; i++) { stems[i].rate(r); } }
 
 fun void controller() {
@@ -118,17 +139,19 @@ fun void controller() {
       }
       else if (msg.address == "/goto/8bar/now") {
         msg.getInt(0) => int i;
-        stems[i].seek(msg.getInt(0)*eightbar_samples());
+        stems[i].seek(msg.getInt(1)*eightbar_samples());
       }
-      else if (msg.address == "/loop/on") { for (0=>int i; i<4; i++) { 1 => stems[i].loop; } }
-      else if (msg.address == "/loop/off") { for (0=>int i; i<4; i++) { 0 => stems[i].loop; } }
-      else if (msg.address == "/loop/set/8bar") {
-        for (0=>int i; i<4; i++) {
-          8*ticks_bar*ticksamples()$int*msg.getInt(0) => stems[i].loop_in;
-        }
-        for (0=>int i; i<4; i++) {
-          8*ticks_bar*ticksamples()$int*msg.getInt(1) => stems[i].loop_out;
-        }
+      else if (msg.address == "/loop") {
+        msg.getInt(0) => int i;
+        stems[i].setloop(msg.getInt(1));
+      }
+      else if (msg.address == "/loop/in") {
+        msg.getInt(0) => int i;
+        stems[i].setloop_in(msg.getInt(1));
+      }
+      else if (msg.address == "/loop/out") {
+        msg.getInt(0) => int i;
+        stems[i].setloop_out(msg.getInt(1));
       }
       else if (msg.address == "/speed/up") { rate(1.02); }
       else if (msg.address == "/speed/down") { rate(0.98); }

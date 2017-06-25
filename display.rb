@@ -45,7 +45,7 @@ class Stem
   end
 
   def toggle_loop
-    @@client.send(Message.new("/loop/toggle",@nr))
+    @@client.send(Message.new("/loop",@nr))
   end
 
   def goto_8bar_quant gridnr
@@ -65,16 +65,30 @@ class Stem
   end
 
   def loop= status
+    @@client.send Message.new('/loop', @nr, status)
+  end
+
+  def loopstart i
+    @loop.x = WIDTH*i*EIGHTBAR_SAMPLES/@samples
+  end
+
+  def loopend i
+    p i
+    @loop.width = WIDTH*i*EIGHTBAR_SAMPLES/@samples - @loop.x
+  end
+
+  def loop status
     status == 1 ? @loop.color = [0.5,0.2,0.2,0.5] : @loop.color = [0.3,0.3,0.3,0.5]
   end
 
   def loop_in= start
     @select_loop = true
-    @loop.x = start
+    @@client.send Message.new('/loop/in', @nr, start)
   end
 
   def loop_out= out
-    @@client.send Message.new('/loop/set/8bar', loop_in, loop_out)
+    @@client.send Message.new('/loop/out', @nr, out)
+    @@client.send Message.new('/loop', @nr, 1)
     @select_loop = false
   end
 
@@ -87,7 +101,6 @@ class Stem
   end
 
   def cursor_on
-    #@cursor.width = WIDTH*EIGHTBAR_SAMPLES/@samples
     @cursor.color = [0.5,0.5,0.5,0.5]
   end
 
@@ -147,11 +160,10 @@ on :key_down do |event|
   when '/'
     selected_stems.each {|s| s.toggle_loop }
   when "left shift"
-    selected_stems.each {|s| s.loop_in = grid[gridnr] }
+    selected_stems.each {|s| s.loop_in = gridnr }
   when "left ctrl"
     stems.each{|s| s.cursor_off if s}
     singlestem = true
-    #p selected_stems.size
     selected_stems.each{|s| s.cursor_on if s}
   when 'space'
     selected_stems.each {|s| s.goto_8bar_next gridnr}
@@ -167,7 +179,7 @@ end
 on :key_up do |event|
   case event.key
   when "left shift"
-    selected_stems.each {|s| s.loop_out = grid[gridnr]+1 }
+    selected_stems.each {|s| s.loop_out = gridnr+1 }
   when "left ctrl"
     singlestem = false
     #stems.each{|s| s.cursor_on if s}
@@ -185,10 +197,16 @@ thr = Thread.new do
       stems[args[1]].phase = args[2] if stems[args[1]]
     end
     server.add_pattern "/loop" do |*args|
+      p args
       stems[args[1]].loop args[2]
     end
-    server.add_pattern "/loop/start" do |*args|
+    server.add_pattern "/loop/in" do |*args|
+      p args
       stems[args[1]].loopstart args[2]
+    end
+    server.add_pattern "/loop/out" do |*args|
+      p args
+      stems[args[1]].loopend args[2]
     end
   end
 end
