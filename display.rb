@@ -49,15 +49,15 @@ class Stem
   end
 
   def goto_8bar_quant gridnr
-    @@client.send Message.new('/goto/8bar/quant', @nr, gridnr)
+    @@client.send Message.new('/8bar/quant', @nr, gridnr)
   end
   
   def goto_8bar_now gridnr
-    @@client.send Message.new('/goto/8bar/now', @nr, gridnr)
+    @@client.send Message.new('/8bar/now', @nr, gridnr)
   end
   
   def goto_8bar_next gridnr
-    @@client.send Message.new('/goto/8bar/next', @nr, gridnr)
+    @@client.send Message.new('/8bar/next', @nr, gridnr)
   end
 
   def phase= s

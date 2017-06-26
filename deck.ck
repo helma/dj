@@ -129,15 +129,15 @@ fun void controller() {
       if (msg.address == "/read") {
         stems[msg.getInt(0)].read(msg.getString(1));
       }
-      else if (msg.address == "/goto/8bar/quant") {
+      else if (msg.address == "/8bar/quant") {
         msg.getInt(0) => int i;
         stems[i].seek(msg.getInt(1)*eightbar_samples()+stems[i].eightbar_offset());
       }
-      else if (msg.address == "/goto/8bar/next") {
+      else if (msg.address == "/8bar/next") {
         msg.getInt(0) => int i;
         spork ~ stems[i].nextbar(msg.getInt(1));
       }
-      else if (msg.address == "/goto/8bar/now") {
+      else if (msg.address == "/8bar/now") {
         msg.getInt(0) => int i;
         stems[i].seek(msg.getInt(1)*eightbar_samples());
       }
