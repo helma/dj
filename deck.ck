@@ -70,7 +70,6 @@ class Stem {
   }
 
   fun void qseek(int b8) {
-  <<<  eightbar_offset()>>>;
     (b8*eightbar_samples()+eightbar_offset())$int => buf.pos;
     1 => buf.play;
   }
@@ -85,7 +84,7 @@ class Stem {
     seek(b8);
   }
 
-  fun void setloop(int l) {
+  fun void looping(int l) {
     l => loop;
     xmit.startMsg( "/loop", "ii" );
     nr => xmit.addInt;
@@ -142,6 +141,7 @@ class Stem {
 Stem stems[4]; 
 for (0=>int i; i<4; i++) { stems[i].connect(i); }
 stems @=> Stem selected[];
+"bseek" => string mode;
 
 fun void stop() { for (0=>int i; i<4; i++) { stems[i].stop(); } }
 fun void rate(float r) { for (0=>int i; i<4; i++) { stems[i].rate(r); } }
@@ -165,50 +165,26 @@ fun void osc() {
         stems[i].read(msg.getString(1));
         update_launchpad();
       }
-      else if (msg.address == "/8bar/quant") {
-        msg.getInt(0) => int i;
-        stems[i].qseek(msg.getInt(1));
-      }
-      else if (msg.address == "/8bar/next") {
-        msg.getInt(0) => int i;
-        spork ~ stems[i].bseek(msg.getInt(1));
-      }
-      else if (msg.address == "/8bar/now") {
-        msg.getInt(0) => int i;
-        stems[i].seek(msg.getInt(1));
-      }
-      else if (msg.address == "/loop") {
-        msg.getInt(0) => int i;
-        stems[i].setloop(msg.getInt(1));
-      }
-      else if (msg.address == "/loop/in") {
-        msg.getInt(0) => int i;
-        stems[i].setloop_in(msg.getInt(1));
-      }
-      else if (msg.address == "/loop/out") {
-        msg.getInt(0) => int i;
-        stems[i].setloop_out(msg.getInt(1));
-      }
-      else if (msg.address == "/speed/up") { rate(1.02); }
-      else if (msg.address == "/speed/down") { rate(0.98); }
-      else if (msg.address == "/speed/normal") { rate(1.0); }
       else if (msg.address == "/stop") { stop(); }
     }
   }
 }
 sendcc(0,0); // reset
 sendcc(0,40); // LED flashing
-//0 => int pos;
-//0 => int offset;
-//0 => int lasttrack;
-//0 => int selected;
-
-//sendnote(72,28);
-sendnote(88,28);
-sendnote(104,13);
-sendnote(120,62);
 
 fun void update_launchpad() {
+  // first row
+  sendcc(104,29);
+  sendcc(105,29);
+  sendcc(106,13);
+  sendcc(108,29);
+  if (mode == "bseek") { sendcc(104,60); }
+  else if (mode == "qseek") { sendcc(105,60); }
+  else if (mode == "seek") { sendcc(106,60); }
+  else if (mode == "loopin") { sendcc(108,13); }
+  else if (mode == "loopout") { sendcc(108,13); }
+
+  // grid
   int col;
   int row;
   for (0=>int i; i<64; i++) {
@@ -218,10 +194,16 @@ fun void update_launchpad() {
     else { sendnote(16*row+col,12); }
   }
   for (0=>int i; i<selected.size(); i++) {
-    selected[i].eightbars() $ int %8 => col;
-    selected[i].eightbars() $ int /8 => row;
+    selected[i].eightbars()$int %8 => col;
+    selected[i].eightbars()$int /8 => row;
     sendnote(16*row+col,60);
   }
+  for (0=>int i; i<4; i++) {
+    if (selected.cap() == 1 && stems[i] == selected[0]) { sendnote(i*16+8,28); }
+    else { sendnote(i*16+8,29); }
+  }
+  sendnote(104,28); // D
+  sendnote(120,13); // H
 }
 
 fun void view_launchpad() {
@@ -230,40 +212,6 @@ fun void view_launchpad() {
     bar_samples()::samp => now; 
   }
 }
-
-/*
-fun void view() {
-
-  while (true) {
-    if (buffer.play() == 1) { 
-
-      ticks() $ int % 16 => led_16th;
-      if (led_16th > 7) { led_16th + 104 => led_16th; }
-      else { led_16th + 96 => led_16th; }
-      if (last16th != led_16th) { sendnote(last16th,12); }
-      sendnote(led_16th,60);
-      led_16th => last16th;
-
-      bars() $ int % 8 + 80 => led_bars;
-      if ( lastbar != led_bars) { sendnote(lastbar,12); }
-      sendnote(led_bars,60);
-      led_bars => lastbar;
-
-      eightbars() $ int %8 => int col;
-      eightbars() $ int /8 => int row;
-      16*row+col => led_8bars;
-      if (eightbars() <= nr_8bars()) {
-        if (last8 != led_8bars) { sendnote(last8,29); }
-        sendnote(led_8bars,60);
-        led_8bars => last8;
-      }
-      else { reset(); }
-    }
-    tickdur() => now;
-  }
-}
-*/
-
 
 fun void launchpad() {
   while ( true ) {
@@ -278,57 +226,58 @@ fun void launchpad() {
         inmsg.data2/16 => int row;
         
         if (col < 8) { // grid
-          if (inmsg.data3 == 127) { qseek(8*row+col); } // press
+          if (inmsg.data3 == 127) { // press
+            if (mode == "qseek") { qseek(8*row+col); }
+            else if (mode == "bseek") { bseek(8*row+col); }
+            else if (mode == "seek") { seek(8*row+col); }
+            else if (mode == "loopin") {
+              for (0=>int i; i<selected.cap(); i++) { selected[i].looping(0); }
+              for (0=>int i; i<selected.cap(); i++) { selected[i].setloop_in(8*row+col); }
+              "loopout" => mode;
+            }
+            else if (mode == "loopout") {
+              for (0=>int i; i<selected.cap(); i++) { selected[i].setloop_out(8*row+col+1); }
+              for (0=>int i; i<selected.cap(); i++) { selected[i].looping(1); }
+              "bseek" => mode;
+            }
+          }
         }
         else if (col == 8) { // A-H
           if (row < 4) {  // A-D, banks
             if (inmsg.data3 == 127) {
-              [stems[row]] @=> selected;
-              update_launchpad();
-            }
-            else if (inmsg.data3 == 0) {
-              stems @=> selected;
-              update_launchpad();
+              if (selected.cap() == 1 && stems[row] == selected[0]) { stems @=> selected; }
+              else { [stems[row]] @=> selected; }
             }
           }
           else if (row == 5) { // E
+          }
+          else if (row == 6) { // F
             if (inmsg.data3 == 127) { rate(1.02); } // press
             else if (inmsg.data3 == 0) { rate(1.0); } // release
           }
-          else if (row == 6) { // F
+          else if (row == 7) { // H
             if (inmsg.data3 == 127) { rate(0.98); } // press
             else if (inmsg.data3 == 0) { rate(1.0); } // release
           }
-          else if (row == 7) { // H
-            if (inmsg.data3 == 127) {
-            //0.96 => buffer.rate;
-            } // press
-          }
         }
       }
 
-  /*
-      else if (inmsg.data1 == 176 && inmsg.data3 == 127) { // 1-8 press
+      else if (inmsg.data1 == 176) {
         inmsg.data2-104 => int i;
-        if (i < nr_files) {
-          0 => buffer.play;
-          files[i] => buffer.read;
-          reset();
-          sendcc(inmsg.data2,60);
-          sendcc(lasttrack,29);
-          inmsg.data2 => lasttrack;
+        if (inmsg.data3 == 127) { // 1-8 press
+          if (i == 0) { "bseek" => mode; }
+          else if (i == 1) { "qseek" => mode; }
+          else if (i == 2) { "seek" => mode; }
+          else if (i == 4) { "loopin" => mode; }
         }
-        else {
-          sendcc(lasttrack,29);
-          reset();
+        else if (inmsg.data3 == 0) { // 1-8 release
+          if (i == 2) { "bseek" => mode; }
         }
       }
-  */
-
     }
+    update_launchpad();
   }
 }
-
 for (0=>int i; i<4; i++) {
   spork ~ stems[i].position();
   spork ~ stems[i].looper();

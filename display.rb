@@ -151,7 +151,13 @@ on :key_down do |event|
     grid = []
     while (pos <= WIDTH) do
       grid << pos
-      grid.size % 4 == 0 ? Rectangle.new(pos, 0, 1, HEIGHT, [1,1,1,0.5]) : Rectangle.new(pos, 0, 1, HEIGHT, [0.5,0.5,0.5,0.5])
+      if (grid.size-1) % 8 == 0
+        Rectangle.new(pos, 0, 2, HEIGHT, [1,1,1,1])
+      elsif (grid.size-1) % 4 == 0 
+        Rectangle.new(pos, 0, 1, HEIGHT, [1,1,1,0.5]) 
+      else
+        Rectangle.new(pos, 0, 1, HEIGHT, [0.5,0.5,0.5,0.5])
+      end
       pos += WIDTH*EIGHTBAR_SAMPLES/samples
     end
     gridnr = 0
