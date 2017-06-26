@@ -30,10 +30,9 @@ class Stem
     @image.width = WIDTH
     @image.height = HEIGHT/4
     @samples = `soxi "#{@file}" |grep Duration|cut -d '=' -f2|sed  's/samples//'|tr -d " "`.to_i
-    @phase = Rectangle.new(0, y, 1, height, "green")
-    @cursor = Rectangle.new(0, y, WIDTH*EIGHTBAR_SAMPLES/@samples, height, [0.5,0.5,0.5,0.5])
+    @phase = Rectangle.new(0, y, 2, height, "green")
+    @cursor = Rectangle.new(0, y, WIDTH, height, [0,0,0,0])
     @loop = Rectangle.new(0, y, 0, height, [0.3,0.3,0.3,0.5])
-    @select_loop = false
   end
 
   def y
@@ -44,28 +43,8 @@ class Stem
     HEIGHT/4
   end
 
-  def toggle_loop
-    @@client.send(Message.new("/loop",@nr))
-  end
-
-  def goto_8bar_quant gridnr
-    @@client.send Message.new('/8bar/quant', @nr, gridnr)
-  end
-  
-  def goto_8bar_now gridnr
-    @@client.send Message.new('/8bar/now', @nr, gridnr)
-  end
-  
-  def goto_8bar_next gridnr
-    @@client.send Message.new('/8bar/next', @nr, gridnr)
-  end
-
   def phase= s
     @phase.x = s*WIDTH
-  end
-
-  def loop= status
-    @@client.send Message.new('/loop', @nr, status)
   end
 
   def loopstart i
@@ -80,62 +59,22 @@ class Stem
     status == 1 ? @loop.color = [0.5,0.2,0.2,0.5] : @loop.color = [0.3,0.3,0.3,0.5]
   end
 
-  def loop_in= start
-    @select_loop = true
-    @@client.send Message.new('/loop/in', @nr, start)
-  end
-
-  def loop_out= out
-    @@client.send Message.new('/loop/out', @nr, out)
-    @@client.send Message.new('/loop', @nr, 1)
-    @select_loop = false
-  end
-
-  def cursor= s
-    @cursor.x = s
-  end
-
-  def cursor_off
-    @cursor.color = [0,0,0,0]
-  end
-
-  def cursor_on
-    @cursor.color = [0.5,0.5,0.5,0.5]
+  def select on
+    on ?  @cursor.color = [0.5,0.5,0.5,0.5] : @cursor.color = [0,0,0,0]
   end
 
 end
 
-singlestem = false
 stems = []
 grid = []
-selected_stems = []
 gridnr = 0
-
-on :mouse_move do |event|
-  singlestem ? selected_stems = [stems[(4*event.y/HEIGHT).floor]] : selected_stems =  stems
-  gridnr = grid.index( grid.select{|g| event.x < g}.first)
-  gridnr = grid.size unless gridnr
-  gridnr -= 1
-  selected_stems.each {|s| s.cursor = grid[gridnr]}
-  stems.each{|s| s.cursor_off if s} if singlestem
-  selected_stems.each{|s| s.cursor_on if s}
-end
-
-on :mouse_down do |event|
-  case event.button
-  when :left
-    selected_stems.each {|s| s.goto_8bar_quant gridnr }
-  when :right
-    selected_stems.each {|s| s.goto_8bar_now gridnr }
-  end
-end
 
 on :key_down do |event|
   case event.key
   when 'escape'
     @@client.send Message.new('/stop')
   when 'q'
-    @@client.send Message.new('/stop')
+    @@client.send Message.new('/quit')
     close
   when 'a'
     dir = `ls -d ~/music/live/dj/* | dmenu -l 20`.chomp
@@ -162,36 +101,6 @@ on :key_down do |event|
     end
     gridnr = 0
     txt = Text.new(4, 0, dir.split('/').last, 20, 'vera.ttf')
-  when '/'
-    selected_stems.each {|s| s.toggle_loop }
-  when "left shift"
-    selected_stems.each {|s| s.loop_in = gridnr }
-  when "left ctrl"
-    stems.each{|s| s.cursor_off if s}
-    singlestem = true
-    selected_stems.each{|s| s.cursor_on if s}
-  when 'space'
-    selected_stems.each {|s| s.goto_8bar_next gridnr}
-  when 'right'
-    @@client.send Message.new('/speed/up')
-  when 'left'
-    @@client.send Message.new('/speed/down')
-  else
-    p event.key
-  end
-end
-
-on :key_up do |event|
-  case event.key
-  when "left shift"
-    selected_stems.each {|s| s.loop_out = gridnr+1 }
-  when "left ctrl"
-    singlestem = false
-    #stems.each{|s| s.cursor_on if s}
-  when 'right'
-    @@client.send Message.new('/speed/normal')
-  when 'left'
-    @@client.send Message.new('/speed/normal')
   end
 end
 
@@ -209,6 +118,12 @@ thr = Thread.new do
     end
     server.add_pattern "/loop/out" do |*args|
       stems[args[1]].loopend args[2]
+    end
+    server.add_pattern "/select" do |*args|
+      stems[args[1]].select true
+    end
+    server.add_pattern "/select/off" do |*args|
+      stems.each{|s| s.select false}
     end
   end
 end

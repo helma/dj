@@ -43,9 +43,9 @@ class Stem {
 
   fun void connect(int i) {
     i => nr;
-    buf => dac;
-    //buf => Gain g => dac;
-    //0. => g.gain;
+    //buf => dac;
+    buf => Gain g => dac;
+    0. => g.gain;
     //0 => buf.channel;
     //buf => dac.chan(nr*2);
     //1 => buf.channel;
@@ -245,8 +245,15 @@ fun void launchpad() {
         else if (col == 8) { // A-H
           if (row < 4) {  // A-D, banks
             if (inmsg.data3 == 127) {
-              if (selected.cap() == 1 && stems[row] == selected[0]) { stems @=> selected; }
-              else { [stems[row]] @=> selected; }
+              if (selected.cap() == 1 && stems[row] == selected[0]) {
+                stems @=> selected;
+                xmit.startMsg( "/select/off");
+              }
+              else {
+                [stems[row]] @=> selected;
+                xmit.startMsg( "/select", "i" );
+                row => xmit.addInt;
+              }
             }
           }
           else if (row == 5) { // E
