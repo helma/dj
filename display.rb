@@ -60,7 +60,7 @@ class Stem
   end
 
   def select on
-    on ?  @cursor.color = [0.5,0.5,0.5,0.5] : @cursor.color = [0,0,0,0]
+    on ? @cursor.color = [0,0,0,0] : @cursor.color = [0.5,0.5,0.5,0.5]
   end
 
 end
@@ -121,9 +121,10 @@ thr = Thread.new do
     end
     server.add_pattern "/select" do |*args|
       stems[args[1]].select true
+      (stems-[stems[args[1]]]).each{|s| s.select false}
     end
-    server.add_pattern "/select/off" do |*args|
-      stems.each{|s| s.select false}
+    server.add_pattern "/select/all" do |*args|
+      stems.each{|s| s.select true}
     end
   end
 end

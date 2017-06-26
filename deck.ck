@@ -38,6 +38,8 @@ class Stem {
   0 => int loop;
   0 => int loop_in;
   0 => int loop_out;
+  0 => int loop_in_8bar;
+  0 => int loop_out_8bar;
   0 => buf.play;
   int nr;
 
@@ -64,9 +66,11 @@ class Stem {
   fun void stop() {
     0 => buf.play;
     0 => buf.pos;
-    0 => int loop;
-    0 => int loop_in;
-    0 => int loop_out;
+    0 => loop;
+    0 => loop_in;
+    0 => loop_out;
+    0 => loop_in_8bar;
+    0 => loop_out_8bar;
   }
 
   fun void qseek(int b8) {
@@ -90,8 +94,12 @@ class Stem {
     nr => xmit.addInt;
     loop => xmit.addInt;
   }
+  fun int getloop() { return loop; }
+  fun int getloop_in() { return loop_in_8bar; }
+  fun int getloop_out() { return loop_out_8bar; }
 
   fun void setloop_in(int eightbars) {
+    eightbars => loop_in_8bar;
     8*ticks_bar*ticksamples()$int*eightbars => loop_in;
     xmit.startMsg( "/loop/in", "ii" );
     nr => xmit.addInt;
@@ -99,6 +107,7 @@ class Stem {
   }
 
   fun void setloop_out(int eightbars) {
+    eightbars => loop_out_8bar;
     8*ticks_bar*ticksamples()$int*eightbars => loop_out;
     xmit.startMsg( "/loop/out", "ii" );
     nr => xmit.addInt;
@@ -196,6 +205,13 @@ fun void update_launchpad() {
   for (0=>int i; i<selected.size(); i++) {
     selected[i].eightbars()$int %8 => col;
     selected[i].eightbars()$int /8 => row;
+    if (selected[i].getloop() == 1) {
+      for (selected[i].getloop_in()=>int j; j < selected[i].getloop_out();j++) {
+        j %8 => int c;
+        j /8 => int r;
+        sendnote(16*r+c,13);
+      }
+    }
     sendnote(16*row+col,60);
   }
   for (0=>int i; i<4; i++) {
@@ -247,7 +263,7 @@ fun void launchpad() {
             if (inmsg.data3 == 127) {
               if (selected.cap() == 1 && stems[row] == selected[0]) {
                 stems @=> selected;
-                xmit.startMsg( "/select/off");
+                xmit.startMsg( "/select/all");
               }
               else {
                 [stems[row]] @=> selected;
@@ -285,6 +301,7 @@ fun void launchpad() {
     update_launchpad();
   }
 }
+
 for (0=>int i; i<4; i++) {
   spork ~ stems[i].position();
   spork ~ stems[i].looper();
