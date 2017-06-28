@@ -84,8 +84,15 @@ class Stem {
   }
 
   fun void bseek(int b8) {
-    next_bar_offset()::samp => now;
+    if (buf.play() == 1) {
+      xmit.startMsg( "/next", "ii" );
+      nr => xmit.addInt;
+      b8 => xmit.addInt;
+      while ((buf.pos() % eightbar_samples())$int != 0) { samp => now; }
+    }
     seek(b8);
+    xmit.startMsg( "/next/off", "i" );
+    nr => xmit.addInt;
   }
 
   fun void looping(int l) {
@@ -142,6 +149,7 @@ class Stem {
 
   fun float eightbar_offset() { return buf.pos() - eightbars() * eightbar_samples(); }
   fun float next_bar_offset() { return (bars()+1)*bar_samples() - buf.pos(); }
+  fun float next_8bar_offset() { return (eightbars()+1)*eightbar_samples() - buf.pos(); }
   fun float bar_offset() { return buf.pos() - bars() * ticks_bar*ticksamples(); }
   fun float tick_offset() { return buf.pos() - ticks() * ticksamples(); }
 }

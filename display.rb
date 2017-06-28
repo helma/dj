@@ -33,6 +33,7 @@ class Stem
     @cursor = Rectangle.new(0, y, WIDTH, height, [0,0,0,0])
     @loop = Rectangle.new(0, y, 0, height, [0.3,0.3,0.3,0.5])
     @phase = Rectangle.new(0, y, 2, height, "green")
+    @next = Rectangle.new(0, y, gridwidth, height, [0,0,0,0])
   end
 
   def y
@@ -43,16 +44,20 @@ class Stem
     HEIGHT/4
   end
 
+  def gridwidth
+    WIDTH*EIGHTBAR_SAMPLES/@samples
+  end
+
   def phase= s
     @phase.x = s*WIDTH
   end
 
   def loopstart i
-    @loop.x = WIDTH*i*EIGHTBAR_SAMPLES/@samples
+    @loop.x = i*gridwidth
   end
 
   def loopend i
-    @loop.width = WIDTH*i*EIGHTBAR_SAMPLES/@samples - @loop.x
+    @loop.width = i*gridwidth - @loop.x
   end
 
   def loop status
@@ -61,6 +66,16 @@ class Stem
 
   def select on
     on ? @cursor.color = [0,0,0,0] : @cursor.color = [0.5,0.5,0.5,0.5]
+  end
+
+  def next i
+    @next.x = i*gridwidth
+    @next.color = [0.2,0.3,0.2,0.5]
+  end
+
+  def next_off
+    @next.x = 0
+    @next.color = [0,0,0,0]
   end
 
 end
@@ -125,6 +140,12 @@ thr = Thread.new do
     end
     server.add_pattern "/select/all" do |*args|
       stems.each{|s| s.select true}
+    end
+    server.add_pattern "/next" do |*args|
+      stems[args[1]].next args[2]
+    end
+    server.add_pattern "/next/off" do |*args|
+      stems[args[1]].next_off 
     end
   end
 end
