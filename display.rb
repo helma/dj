@@ -30,9 +30,9 @@ class Stem
     @image.width = WIDTH
     @image.height = HEIGHT/4
     @samples = `soxi "#{@file}" |grep Duration|cut -d '=' -f2|sed  's/samples//'|tr -d " "`.to_i
-    @phase = Rectangle.new(0, y, 2, height, "green")
     @cursor = Rectangle.new(0, y, WIDTH, height, [0,0,0,0])
     @loop = Rectangle.new(0, y, 0, height, [0.3,0.3,0.3,0.5])
+    @phase = Rectangle.new(0, y, 2, height, "green")
   end
 
   def y

@@ -187,6 +187,7 @@ fun void update_launchpad() {
   sendcc(105,29);
   sendcc(106,13);
   sendcc(108,29);
+  sendcc(109,12);
   if (mode == "bseek") { sendcc(104,60); }
   else if (mode == "qseek") { sendcc(105,60); }
   else if (mode == "seek") { sendcc(106,60); }
@@ -218,8 +219,15 @@ fun void update_launchpad() {
     if (selected.cap() == 1 && stems[i] == selected[0]) { sendnote(i*16+8,28); }
     else { sendnote(i*16+8,29); }
   }
+  for (0=>int i; i<selected.size(); i++) {
+    if (selected[i].loop == 1) { sendcc(109,28); }
+  }
   sendnote(104,28); // D
   sendnote(120,13); // H
+}
+
+fun void loop_off() {
+  for (0=>int i; i<selected.size(); i++) { selected[i].looping(0); } 
 }
 
 fun void view_launchpad() {
@@ -292,9 +300,10 @@ fun void launchpad() {
           else if (i == 1) { "qseek" => mode; }
           else if (i == 2) { "seek" => mode; }
           else if (i == 4) { "loopin" => mode; }
+          else if (i == 5) { loop_off(); }
         }
         else if (inmsg.data3 == 0) { // 1-8 release
-          if (i == 2) { "bseek" => mode; }
+          if (i == 2) { loop_off(); }
         }
       }
     }
