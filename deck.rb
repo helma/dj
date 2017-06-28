@@ -20,9 +20,9 @@ launchpad = `chuck --probe 2>&1 |grep Launchpad|sed -n '1p'`.split(":")[1].strip
   end
 end
 
-#`ruby ./display.rb`
+load "./display.rb"
 
 at_exit do
-  #`chuck --kill`
-  #`jack_control stop`
+  `chuck --kill`
+  `jack_control stop`
 end

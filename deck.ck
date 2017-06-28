@@ -42,12 +42,13 @@ class Stem {
   0 => int loop_out_8bar;
   0 => buf.play;
   int nr;
+  0 => int wait_id;
 
   fun void connect(int i) {
     i => nr;
     //buf => dac;
     buf => Gain g => dac;
-    0. => g.gain;
+    0.5 => g.gain;
     //0 => buf.channel;
     //buf => dac.chan(nr*2);
     //1 => buf.channel;
@@ -83,7 +84,7 @@ class Stem {
     1 => buf.play;
   }
 
-  fun void bseek(int b8) {
+  fun void wait(int b8) {
     if (buf.play() == 1) {
       xmit.startMsg( "/next", "ii" );
       nr => xmit.addInt;
@@ -93,6 +94,12 @@ class Stem {
     seek(b8);
     xmit.startMsg( "/next/off", "i" );
     nr => xmit.addInt;
+    0 => wait_id;
+  }
+
+  fun void bseek(int b8) {
+    if (wait_id != 0) { Machine.remove(wait_id); }
+    (spork ~ wait(b8)).id() => wait_id; 
   }
 
   fun void looping(int l) {
@@ -164,7 +171,7 @@ fun void stop() { for (0=>int i; i<4; i++) { stems[i].stop(); } }
 fun void rate(float r) { for (0=>int i; i<4; i++) { stems[i].rate(r); } }
 fun void seek(int b8) { for (0=>int i; i<selected.cap(); i++) { selected[i].seek(b8); } }
 fun void qseek(int b8) { for (0=>int i; i<selected.cap(); i++) { selected[i].qseek(b8); } }
-fun void bseek(int b8) { for (0=>int i; i<selected.cap(); i++) { spork ~ selected[i].bseek(b8); } }
+fun void bseek(int b8) { for (0=>int i; i<selected.cap(); i++) { selected[i].bseek(b8); } }
 
 fun void osc() {
 

@@ -80,42 +80,44 @@ class Stem
 
 end
 
-stems = []
-grid = []
-gridnr = 0
+@stems = []
+
+def read_files
+  clear
+  @stems = []
+  dir = `ls -d ~/music/live/dj/* | dmenu -l 20`.chomp
+  Dir["#{dir}/[0-3].wav"].each_with_index do |wav,i|
+    if File.exists?(wav)
+      @@client.send Message.new('/load', dir)
+      @stems << Stem.new(wav, i)
+    end
+  end
+  samples = @stems.collect {|s| s.samples}.max
+  pos = 0
+  grid = []
+  while (pos <= WIDTH) do
+    grid << pos
+    if (grid.size-1) % 8 == 0
+      Rectangle.new(pos, 0, 2, HEIGHT, [1,1,1,1])
+    elsif (grid.size-1) % 4 == 0 
+      Rectangle.new(pos, 0, 1, HEIGHT, [1,1,1,0.5]) 
+    else
+      Rectangle.new(pos, 0, 1, HEIGHT, [0.5,0.5,0.5,0.5])
+    end
+    pos += WIDTH*EIGHTBAR_SAMPLES/samples
+  end
+  txt = Text.new(4, 0, dir.split('/').last, 20, 'vera.ttf')
+end
 
 on :key_down do |event|
   case event.key
   when 'escape'
     @@client.send Message.new('/stop')
   when 'q'
-    @@client.send Message.new('/quit')
+    @@client.send Message.new('/stop')
     close
   when 'a'
-    dir = `ls -d ~/music/live/dj/* | dmenu -l 20`.chomp
-    clear
-    Dir["#{dir}/[0-3].wav"].each_with_index do |wav,i|
-      if File.exists?(wav)
-        @@client.send Message.new('/load', dir)
-        stems << Stem.new(wav, i)
-      end
-    end
-    samples = stems.collect {|s| s.samples}.max
-    pos = 0
-    grid = []
-    while (pos <= WIDTH) do
-      grid << pos
-      if (grid.size-1) % 8 == 0
-        Rectangle.new(pos, 0, 2, HEIGHT, [1,1,1,1])
-      elsif (grid.size-1) % 4 == 0 
-        Rectangle.new(pos, 0, 1, HEIGHT, [1,1,1,0.5]) 
-      else
-        Rectangle.new(pos, 0, 1, HEIGHT, [0.5,0.5,0.5,0.5])
-      end
-      pos += WIDTH*EIGHTBAR_SAMPLES/samples
-    end
-    gridnr = 0
-    txt = Text.new(4, 0, dir.split('/').last, 20, 'vera.ttf')
+    read_files
   end
 end
 
@@ -123,31 +125,32 @@ thr = Thread.new do
   OSC.run do
     server = Server.new 9090
     server.add_pattern "/phase" do |*args|
-      stems[args[1]].phase = args[2] if stems[args[1]]
+      @stems[args[1]].phase = args[2] if @stems[args[1]]
     end
     server.add_pattern "/loop" do |*args|
-      stems[args[1]].loop args[2]
+      @stems[args[1]].loop args[2]
     end
     server.add_pattern "/loop/in" do |*args|
-      stems[args[1]].loopstart args[2]
+      @stems[args[1]].loopstart args[2]
     end
     server.add_pattern "/loop/out" do |*args|
-      stems[args[1]].loopend args[2]
+      @stems[args[1]].loopend args[2]
     end
     server.add_pattern "/select" do |*args|
-      stems[args[1]].select true
-      (stems-[stems[args[1]]]).each{|s| s.select false}
+      @stems[args[1]].select true
+      (@stems-[@stems[args[1]]]).each{|s| s.select false}
     end
     server.add_pattern "/select/all" do |*args|
-      stems.each{|s| s.select true}
+      @stems.each{|s| s.select true}
     end
     server.add_pattern "/next" do |*args|
-      stems[args[1]].next args[2]
+      @stems[args[1]].next args[2]
     end
     server.add_pattern "/next/off" do |*args|
-      stems[args[1]].next_off 
+      @stems[args[1]].next_off 
     end
   end
 end
 
+read_files
 show
