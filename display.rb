@@ -83,14 +83,12 @@ end
 @stems = []
 
 def read_files
+  #@@client.send Message.new('/stop')
   clear
   @stems = []
   dir = `ls -d ~/music/live/dj/* | dmenu -l 20`.chomp
   Dir["#{dir}/[0-3].wav"].each_with_index do |wav,i|
-    if File.exists?(wav)
-      @@client.send Message.new('/load', dir)
-      @stems << Stem.new(wav, i)
-    end
+    @stems << Stem.new(wav, i) if File.exists?(wav)
   end
   samples = @stems.collect {|s| s.samples}.max
   pos = 0

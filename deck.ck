@@ -268,7 +268,7 @@ fun void launchpad() {
           if (inmsg.data3 == 127) { // press
             if (mode == "qseek") { qseek(8*row+col); }
             else if (mode == "bseek") { bseek(8*row+col); }
-            else if (mode == "seek") { seek(8*row+col); }
+            else if (mode == "seek") { if (selected.cap() == 4) {seek(8*row+col);} }
             else if (mode == "loopin") {
               for (0=>int i; i<selected.cap(); i++) { selected[i].looping(0); }
               for (0=>int i; i<selected.cap(); i++) { selected[i].setloop_in(8*row+col); }
@@ -318,7 +318,7 @@ fun void launchpad() {
           else if (i == 5) { loop_off(); }
         }
         else if (inmsg.data3 == 0) { // 1-8 release
-          if (i == 2) { loop_off(); }
+          if (i == 2) { "bseek" => mode; }
         }
       }
     }
