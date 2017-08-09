@@ -135,6 +135,7 @@ thr = Thread.new do
       @stems[args[1]].loopend args[2]
     end
     server.add_pattern "/select" do |*args|
+      p args
       @stems[args[1]].select true
       (@stems-[@stems[args[1]]]).each{|s| s.select false}
     end

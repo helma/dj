@@ -11,6 +11,7 @@ launchpad = `chuck --probe 2>&1 |grep Launchpad|sed -n '1p'`.split(":")[1].strip
     `jack_control start`
     sleep 1
     if d == "USBStreamer" or d == "UDAC8"
+    p d
       chuck = spawn "chuck --channels:8 deck.ck:#{launchpad}"
     else
       chuck = spawn "chuck deck.ck:#{launchpad}"

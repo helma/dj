@@ -47,12 +47,12 @@ class Stem {
   fun void connect(int i) {
     i => nr;
     //buf => dac;
-    buf => Gain g => dac;
-    0.5 => g.gain;
-    //0 => buf.channel;
-    //buf => dac.chan(nr*2);
-    //1 => buf.channel;
-    //buf => dac.chan(nr*2+1);
+    //buf => Gain g => dac;
+    //0.5 => g.gain;
+    0 => buf.channel;
+    buf => dac.chan(nr*2);
+    1 => buf.channel;
+    buf => dac.chan(nr*2+1);
   }
 
   fun int eightbar_size() {
